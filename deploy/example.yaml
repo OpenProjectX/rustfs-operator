@@ -1,0 +1,56 @@
+# Example: manage a bucket, a policy and a user on a RustFS server.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rustfs-conn
+stringData:
+  endpoint: http://rustfs.storage.svc:9000
+  accessKey: rustfsadmin
+  secretKey: rustfsadmin
+  # region: us-east-1     # optional
+  # insecure: "true"      # optional, skip TLS verification
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-user-creds
+stringData:
+  secretKey: change-me-please
+---
+apiVersion: rustfs.com/v1alpha1
+kind: Bucket
+metadata:
+  name: app-data
+spec:
+  connection:
+    secretRef: rustfs-conn
+  versioning: true
+  quotaBytes: 10737418240   # 10 GiB
+  deletionPolicy: Retain
+---
+apiVersion: rustfs.com/v1alpha1
+kind: Policy
+metadata:
+  name: app-data-rw
+spec:
+  connection:
+    secretRef: rustfs-conn
+  document:
+    Version: "2012-10-17"
+    Statement:
+      - Effect: Allow
+        Action: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+        Resource: ["arn:aws:s3:::app-data", "arn:aws:s3:::app-data/*"]
+---
+apiVersion: rustfs.com/v1alpha1
+kind: User
+metadata:
+  name: app-user
+spec:
+  connection:
+    secretRef: rustfs-conn
+  secretKeyRef:
+    name: app-user-creds
+    key: secretKey
+  policies: ["app-data-rw"]
+  enabled: true

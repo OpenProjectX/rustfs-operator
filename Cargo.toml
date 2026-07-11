@@ -1,0 +1,50 @@
+[package]
+name = "rustfs-operator"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "MIT OR Apache-2.0"
+description = "Kubernetes operator managing RustFS buckets, IAM users and policies"
+
+[dependencies]
+# RustFS management-plane client
+rc-core = "0.1.24"
+rc-s3 = "0.1.24"
+
+# Kubernetes
+kube = { version = "4.0", default-features = false, features = ["client", "runtime", "derive", "rustls-tls", "ring"] }
+k8s-openapi = { version = "0.28", default-features = false, features = ["schemars", "v1_34"] }
+schemars = "1"
+# kube pulls in ring, the AWS SDK pulls in aws-lc-rs; with both compiled in,
+# rustls needs the process-level provider installed explicitly (see main.rs).
+rustls = { version = "0.23", features = ["ring"] }
+
+# Async runtime
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+# Errors / logging / CLI
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive", "env"] }
+
+[dev-dependencies]
+mockall = "0.14"
+tempfile = "3"
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["k3s"] }
+
+[features]
+default = []
+# Tests that need Docker and the rustfs/rustfs image
+integration = []
+# Tests that need Docker, the rustfs/rustfs and rancher/k3s images
+e2e = []

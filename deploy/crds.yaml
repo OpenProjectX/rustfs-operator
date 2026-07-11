@@ -1,0 +1,280 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: buckets.rustfs.com
+spec:
+  group: rustfs.com
+  names:
+    categories: []
+    kind: Bucket
+    plural: buckets
+    shortNames:
+    - rfb
+    singular: bucket
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .status.message
+      name: Message
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for BucketSpec via `CustomResource`
+        properties:
+          spec:
+            description: An S3 bucket in RustFS.
+            properties:
+              bucketName:
+                description: Bucket name in RustFS; defaults to the CR name.
+                nullable: true
+                type: string
+              connection:
+                description: Reference to the connection Secret (same namespace as the resource).
+                properties:
+                  secretRef:
+                    description: Name of the Secret holding `endpoint`, `accessKey` and `secretKey`.
+                    type: string
+                required:
+                - secretRef
+                type: object
+              deletionPolicy:
+                default: Delete
+                description: What happens to the remote resource when the CR is deleted.
+                enum:
+                - Delete
+                - Retain
+                type: string
+              quotaBytes:
+                description: Hard quota in bytes; unset means unmanaged.
+                format: uint64
+                minimum: 0.0
+                nullable: true
+                type: integer
+              versioning:
+                description: Desired versioning state; unset means unmanaged.
+                nullable: true
+                type: boolean
+            required:
+            - connection
+            type: object
+          status:
+            description: Shared status for all RustFS resources.
+            nullable: true
+            properties:
+              message:
+                description: Human-readable state or last error.
+                nullable: true
+                type: string
+              observedGeneration:
+                description: Generation last acted upon.
+                format: int64
+                nullable: true
+                type: integer
+              ready:
+                default: false
+                description: True once the remote resource matches the spec.
+                type: boolean
+            type: object
+        required:
+        - spec
+        title: Bucket
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: users.rustfs.com
+spec:
+  group: rustfs.com
+  names:
+    categories: []
+    kind: User
+    plural: users
+    shortNames:
+    - rfu
+    singular: user
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .status.message
+      name: Message
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for UserSpec via `CustomResource`
+        properties:
+          spec:
+            description: An IAM user in RustFS.
+            properties:
+              accessKey:
+                description: Access key (username) in RustFS; defaults to the CR name.
+                nullable: true
+                type: string
+              connection:
+                description: Reference to the connection Secret (same namespace as the resource).
+                properties:
+                  secretRef:
+                    description: Name of the Secret holding `endpoint`, `accessKey` and `secretKey`.
+                    type: string
+                required:
+                - secretRef
+                type: object
+              deletionPolicy:
+                default: Delete
+                description: What happens to the remote resource when the CR is deleted.
+                enum:
+                - Delete
+                - Retain
+                type: string
+              enabled:
+                default: true
+                description: Whether the user is enabled.
+                type: boolean
+              policies:
+                default: []
+                description: |-
+                  Policies attached to the user; managed declaratively (extra
+                  attachments are detached).
+                items:
+                  type: string
+                type: array
+              secretKeyRef:
+                description: Secret holding the user's secret key (used at creation time).
+                properties:
+                  key:
+                    default: secretKey
+                    description: Key within the Secret; defaults to `secretKey`.
+                    type: string
+                  name:
+                    description: Secret name.
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - connection
+            - secretKeyRef
+            type: object
+          status:
+            description: Shared status for all RustFS resources.
+            nullable: true
+            properties:
+              message:
+                description: Human-readable state or last error.
+                nullable: true
+                type: string
+              observedGeneration:
+                description: Generation last acted upon.
+                format: int64
+                nullable: true
+                type: integer
+              ready:
+                default: false
+                description: True once the remote resource matches the spec.
+                type: boolean
+            type: object
+        required:
+        - spec
+        title: User
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: policies.rustfs.com
+spec:
+  group: rustfs.com
+  names:
+    categories: []
+    kind: Policy
+    plural: policies
+    shortNames:
+    - rfp
+    singular: policy
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .status.message
+      name: Message
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for PolicySpec via `CustomResource`
+        properties:
+          spec:
+            description: An IAM policy in RustFS.
+            properties:
+              connection:
+                description: Reference to the connection Secret (same namespace as the resource).
+                properties:
+                  secretRef:
+                    description: Name of the Secret holding `endpoint`, `accessKey` and `secretKey`.
+                    type: string
+                required:
+                - secretRef
+                type: object
+              deletionPolicy:
+                default: Delete
+                description: What happens to the remote resource when the CR is deleted.
+                enum:
+                - Delete
+                - Retain
+                type: string
+              document:
+                description: IAM policy document, written inline as YAML/JSON.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              policyName:
+                description: Policy name in RustFS; defaults to the CR name.
+                nullable: true
+                type: string
+            required:
+            - connection
+            - document
+            type: object
+          status:
+            description: Shared status for all RustFS resources.
+            nullable: true
+            properties:
+              message:
+                description: Human-readable state or last error.
+                nullable: true
+                type: string
+              observedGeneration:
+                description: Generation last acted upon.
+                format: int64
+                nullable: true
+                type: integer
+              ready:
+                default: false
+                description: True once the remote resource matches the spec.
+                type: boolean
+            type: object
+        required:
+        - spec
+        title: Policy
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
