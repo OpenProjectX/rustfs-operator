@@ -15,8 +15,8 @@ use kube::api::{DeleteParams, PostParams};
 use kube::config::{KubeConfigOptions, Kubeconfig};
 use kube::{Api, Client, CustomResourceExt};
 use serde_json::json;
-use testcontainers::runners::AsyncRunner;
 use testcontainers::ImageExt;
+use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::k3s::{K3s, KUBE_SECURE_PORT};
 
 use rustfs_operator::crd::{
@@ -123,12 +123,16 @@ async fn operator_reconciles_crs_against_rustfs() {
     // --- connection + user credentials secrets ---
     let secrets: Api<Secret> = Api::namespaced(client.clone(), NS);
     secrets
-        .create(&PostParams::default(), &connection_secret("rustfs-conn", &endpoint))
+        .create(
+            &PostParams::default(),
+            &connection_secret("rustfs-conn", &endpoint),
+        )
         .await
         .expect("create connection secret");
     let mut user_creds = Secret::default();
     user_creds.metadata.name = Some("e2e-user-creds".into());
-    user_creds.string_data = Some([("secretKey".to_string(), "e2e-secret-key-123".to_string())].into());
+    user_creds.string_data =
+        Some([("secretKey".to_string(), "e2e-secret-key-123".to_string())].into());
     secrets
         .create(&PostParams::default(), &user_creds)
         .await

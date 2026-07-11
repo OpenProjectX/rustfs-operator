@@ -3,10 +3,10 @@
 use std::sync::Arc;
 
 use kube::runtime::controller::Action;
-use kube::runtime::finalizer::{finalizer, Event};
+use kube::runtime::finalizer::{Event, finalizer};
 use kube::{Api, ResourceExt};
 
-use super::{namespace_of, patch_status, Context, FINALIZER, REQUEUE_OK};
+use super::{Context, FINALIZER, REQUEUE_OK, namespace_of, patch_status};
 use crate::connection::provider_for;
 use crate::crd::{Bucket, BucketSpec, DeletionPolicy, ResourceStatus};
 use crate::error::{Error, Result};
@@ -116,8 +116,7 @@ mod tests {
         let mut fs = MockRustFs::new();
         fs.expect_bucket_exists().return_once(|_| Ok(true));
         fs.expect_get_versioning().return_once(|_| Ok(Some(true)));
-        fs.expect_get_bucket_quota()
-            .return_once(|_| Ok(Some(1024)));
+        fs.expect_get_bucket_quota().return_once(|_| Ok(Some(1024)));
         // no create/set expectations: any call would panic
 
         ensure_bucket(&fs, "demo", &spec(Some(true), Some(1024)))
@@ -157,6 +156,8 @@ mod tests {
         fs.expect_delete_bucket()
             .withf(|b| b == "demo")
             .return_once(|_| Ok(()));
-        cleanup_bucket(&fs, "demo", &spec(None, None)).await.unwrap();
+        cleanup_bucket(&fs, "demo", &spec(None, None))
+            .await
+            .unwrap();
     }
 }

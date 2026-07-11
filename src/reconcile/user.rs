@@ -4,11 +4,11 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use kube::runtime::controller::Action;
-use kube::runtime::finalizer::{finalizer, Event};
+use kube::runtime::finalizer::{Event, finalizer};
 use kube::{Api, ResourceExt};
 use rc_core::admin::UserStatus;
 
-use super::{namespace_of, patch_status, Context, FINALIZER, REQUEUE_OK};
+use super::{Context, FINALIZER, REQUEUE_OK, namespace_of, patch_status};
 use crate::connection::{provider_for, secret_key_value};
 use crate::crd::{DeletionPolicy, ResourceStatus, User, UserSpec};
 use crate::error::{Error, Result};

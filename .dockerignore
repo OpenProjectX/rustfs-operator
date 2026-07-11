@@ -1,0 +1,8 @@
+target/
+.github/
+charts/
+deploy/
+tests/
+.claude/
+.idea/
+*.md

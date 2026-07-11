@@ -55,7 +55,9 @@ async fn provider_manages_buckets_policies_and_users() {
 
     // --- users ---
     assert!(fs.get_user("it-user").await.unwrap().is_none());
-    fs.create_user("it-user", "it-secret-key-123").await.unwrap();
+    fs.create_user("it-user", "it-secret-key-123")
+        .await
+        .unwrap();
     let user = fs.get_user("it-user").await.unwrap().unwrap();
     assert_eq!(user.access_key, "it-user");
 

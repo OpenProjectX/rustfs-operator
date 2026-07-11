@@ -3,10 +3,10 @@
 use std::sync::Arc;
 
 use kube::runtime::controller::Action;
-use kube::runtime::finalizer::{finalizer, Event};
+use kube::runtime::finalizer::{Event, finalizer};
 use kube::{Api, ResourceExt};
 
-use super::{namespace_of, patch_status, Context, FINALIZER, REQUEUE_OK};
+use super::{Context, FINALIZER, REQUEUE_OK, namespace_of, patch_status};
 use crate::connection::provider_for;
 use crate::crd::{DeletionPolicy, Policy, PolicySpec, ResourceStatus};
 use crate::error::{Error, Result};
@@ -209,15 +209,16 @@ mod tests {
             )))
         });
         // no put_policy expectation: rewriting would panic
-        ensure_policy(&fs, "read-demo", &spec(desired)).await.unwrap();
+        ensure_policy(&fs, "read-demo", &spec(desired))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn changed_document_is_rewritten() {
         let mut fs = MockRustFs::new();
-        fs.expect_get_policy().return_once(|_| {
-            Ok(Some(RfPolicy::new("read-demo", r#"{"Version":"old"}"#)))
-        });
+        fs.expect_get_policy()
+            .return_once(|_| Ok(Some(RfPolicy::new("read-demo", r#"{"Version":"old"}"#))));
         fs.expect_put_policy().return_once(|_, _| Ok(()));
 
         ensure_policy(&fs, "read-demo", &spec(doc())).await.unwrap();

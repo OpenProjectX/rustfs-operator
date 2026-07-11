@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use kube::api::{Patch, PatchParams};
-use kube::runtime::watcher;
 use kube::runtime::Controller;
+use kube::runtime::watcher;
 use kube::{Api, Client, Resource, ResourceExt};
 use serde::de::DeserializeOwned;
 use tracing::{info, warn};
@@ -45,7 +45,11 @@ where
     }
 }
 
-fn error_policy<K>(obj: Arc<K>, err: &Error, _ctx: Arc<Context>) -> kube::runtime::controller::Action
+fn error_policy<K>(
+    obj: Arc<K>,
+    err: &Error,
+    _ctx: Arc<Context>,
+) -> kube::runtime::controller::Action
 where
     K: Resource<DynamicType = ()>,
 {

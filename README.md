@@ -29,16 +29,30 @@ See `deploy/example.yaml` for a complete example. Each resource supports
 `deletionPolicy: Delete` (default; the remote resource is removed via
 finalizer when the CR is deleted) or `Retain`.
 
-## Install & run
+## Install
+
+Via Helm (chart repo served from GitHub Pages, image from GHCR):
+
+```sh
+helm repo add rustfs-operator https://openprojectx.github.io/rustfs-operator
+helm install rustfs-operator rustfs-operator/rustfs-operator \
+  --namespace rustfs-operator --create-namespace
+```
+
+Or run from source against the current kubeconfig:
 
 ```sh
 # CRDs (regenerate with: cargo run -- crd > deploy/crds.yaml)
 kubectl apply -f deploy/crds.yaml
-kubectl apply -f deploy/rbac.yaml
-
-# run the controllers (in-cluster or with a local kubeconfig)
 cargo run --release -- run
 ```
+
+## Releasing
+
+Push a `v*` tag. The release workflow builds and pushes
+`ghcr.io/openprojectx/rustfs-operator:<version>`, packages the Helm chart to
+the `gh-pages` chart repository, and creates a GitHub release with the CRD
+manifest and a linux-amd64 binary attached.
 
 ## Behavior notes
 

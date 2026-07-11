@@ -1,0 +1,34 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "rustfs-operator.fullname" . }}
+  labels:
+    {{- include "rustfs-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["rustfs.com"]
+    resources: ["buckets", "users", "policies"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["rustfs.com"]
+    resources: ["buckets/status", "users/status", "policies/status"]
+    verbs: ["get", "patch", "update"]
+  # connection and user-credential secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "rustfs-operator.fullname" . }}
+  labels:
+    {{- include "rustfs-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "rustfs-operator.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "rustfs-operator.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
