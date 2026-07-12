@@ -1,0 +1,70 @@
+{{- $seen := dict }}
+{{- range .Values.clusterConnections }}
+{{- $name := .name | default "" }}
+{{- if eq $name "" }}
+{{- fail "clusterConnections: every entry needs a non-empty 'name'" }}
+{{- end }}
+{{- if hasKey $seen $name }}
+{{- fail (printf "clusterConnections: duplicate name %q (ClusterConnection is cluster-scoped; names must be unique)" $name) }}
+{{- end }}
+{{- $_ := set $seen $name true }}
+{{- $endpoint := .endpoint | default "" }}
+{{- if eq $endpoint "" }}
+{{- fail (printf "clusterConnections[%s]: 'endpoint' is required" $name) }}
+{{- end }}
+{{- $creds := .credentials | default dict }}
+{{- $existing := $creds.existingSecret | default "" }}
+{{- $accessKey := $creds.accessKey | default "" }}
+{{- $secretKey := $creds.secretKey | default "" }}
+{{- if and (ne $existing "") (or (ne $accessKey "") (ne $secretKey "")) }}
+{{- fail (printf "clusterConnections[%s]: set either credentials.existingSecret or inline credentials.accessKey/secretKey, not both" $name) }}
+{{- end }}
+{{- $create := true }}
+{{- if hasKey $creds "create" }}
+{{- $create = $creds.create }}
+{{- end }}
+{{- if ne $existing "" }}
+{{- $create = false }}
+{{- end }}
+{{- if and (eq $existing "") (not $create) }}
+{{- fail (printf "clusterConnections[%s]: no credentials source; set credentials.existingSecret or leave credentials.create enabled with accessKey/secretKey" $name) }}
+{{- end }}
+{{- if and $create (or (eq $accessKey "") (eq $secretKey "")) }}
+{{- fail (printf "clusterConnections[%s]: credentials.accessKey and credentials.secretKey must both be set when the chart creates the Secret" $name) }}
+{{- end }}
+{{- $secretName := ternary $existing ($creds.secretName | default (printf "%s-%s-admin" (include "rustfs-operator.fullname" $) $name)) (ne $existing "") }}
+---
+apiVersion: rustfs.com/v1alpha1
+kind: ClusterConnection
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "rustfs-operator.labels" $ | nindent 4 }}
+spec:
+  endpoint: {{ $endpoint | quote }}
+  credentialsSecretRef: {{ $secretName | quote }}
+  {{- with .region }}
+  region: {{ . | quote }}
+  {{- end }}
+  {{- if .insecure }}
+  insecure: true
+  {{- end }}
+  {{- with .allowedNamespaces }}
+  allowedNamespaces:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- if $create }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "rustfs-operator.labels" $ | nindent 4 }}
+type: Opaque
+stringData:
+  accessKey: {{ $accessKey | quote }}
+  secretKey: {{ $secretKey | quote }}
+{{- end }}
+{{- end }}

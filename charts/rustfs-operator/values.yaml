@@ -23,6 +23,26 @@ rbac:
   # operator's namespace; the operator then only reads Secrets there.
   clusterWideSecrets: true
 
+# Optionally declare ClusterConnection resources (and their admin
+# credentials Secrets) inline. Off by default; see the chart README.
+# WARNING: inline accessKey/secretKey end up in the Helm release values —
+# prefer `existingSecret` (sealed/external secret) in production.
+clusterConnections: []
+# clusterConnections:
+#   - name: prod                    # required, cluster-scoped resource name
+#     endpoint: http://rustfs.storage.svc:9000   # required
+#     region: ""                    # optional
+#     insecure: false               # optional
+#     allowedNamespaces: []         # optional; empty/omitted = all namespaces
+#     credentials:
+#       # EITHER inline (chart creates the Secret in the release namespace):
+#       create: true                # default true
+#       secretName: ""              # default "<fullname>-<name>-admin"
+#       accessKey: ""
+#       secretKey: ""
+#       # OR reference an existing Secret with accessKey/secretKey keys:
+#       existingSecret: ""
+
 # value for RUST_LOG
 logLevel: info
 

@@ -53,6 +53,10 @@ helm install rustfs-operator rustfs-operator/rustfs-operator \
   --namespace rustfs-operator --create-namespace
 ```
 
+The chart can also bootstrap `ClusterConnection` resources (and their admin
+credentials Secrets) from values — see
+[`charts/rustfs-operator/README.md`](charts/rustfs-operator/README.md).
+
 Or run from source against the current kubeconfig:
 
 ```sh
