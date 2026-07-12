@@ -16,6 +16,12 @@ serviceAccount:
 
 rbac:
   create: true
+  # Grants cluster-wide Secret read. Needed for `connection.secretRef`
+  # (per-namespace connection secrets) and for `User.spec.secretKeyRef`
+  # Secrets in application namespaces. Set to false for the strictest setup:
+  # everything uses `connection.clusterRef` and User resources live in the
+  # operator's namespace; the operator then only reads Secrets there.
+  clusterWideSecrets: true
 
 # value for RUST_LOG
 logLevel: info

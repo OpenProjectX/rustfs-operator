@@ -1,4 +1,34 @@
 # Example: manage a bucket, a policy and a user on a RustFS server.
+#
+# Two connection styles are shown:
+#  - `connection.secretRef`: connection Secret in the resource's namespace
+#  - `connection.clusterRef`: centrally managed ClusterConnection (admin
+#    credentials Secret lives only in the operator's namespace)
+---
+# --- centrally managed connection (cluster-scoped) ---
+# The credentials Secret is created in the OPERATOR's namespace:
+#   kubectl -n rustfs-operator create secret generic rustfs-admin \
+#     --from-literal=accessKey=rustfsadmin --from-literal=secretKey=rustfsadmin
+apiVersion: rustfs.com/v1alpha1
+kind: ClusterConnection
+metadata:
+  name: prod
+spec:
+  endpoint: http://rustfs.storage.svc:9000
+  credentialsSecretRef: rustfs-admin
+  # region: us-east-1
+  # insecure: true
+  # Restrict which namespaces may use this connection (absent = all):
+  allowedNamespaces: ["default", "team-a"]
+---
+apiVersion: rustfs.com/v1alpha1
+kind: Bucket
+metadata:
+  name: central-bucket
+spec:
+  connection:
+    clusterRef: prod
+  versioning: true
 apiVersion: v1
 kind: Secret
 metadata:

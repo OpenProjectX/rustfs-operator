@@ -1,28 +1,89 @@
-//! Custom resource definitions: Bucket, User, Policy (group `rustfs.com/v1alpha1`).
+//! Custom resource definitions: Bucket, User, Policy and ClusterConnection
+//! (group `rustfs.com/v1alpha1`).
 //!
-//! Every resource points at a connection Secret in its own namespace holding
-//! the RustFS endpoint and admin credentials:
+//! Every namespaced resource points at a RustFS server in one of two ways:
 //!
-//! ```yaml
-//! stringData:
-//!   endpoint: http://rustfs.storage.svc:9000
-//!   accessKey: rustfsadmin
-//!   secretKey: rustfsadmin
-//!   # optional:
-//!   region: us-east-1
-//!   insecure: "true"
-//! ```
+//! - `connection.secretRef`: a Secret in the resource's own namespace holding
+//!   `endpoint`, `accessKey` and `secretKey` (self-service; the namespace owns
+//!   its credentials).
+//! - `connection.clusterRef`: the name of a cluster-scoped
+//!   [`ClusterConnection`], whose admin credentials Secret lives only in the
+//!   operator's namespace (centrally managed).
 
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Reference to the connection Secret (same namespace as the resource).
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+/// Reference to a RustFS server. Exactly one of `secretRef` / `clusterRef`
+/// must be set (validated at reconcile time).
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionRef {
-    /// Name of the Secret holding `endpoint`, `accessKey` and `secretKey`.
-    pub secret_ref: String,
+    /// Name of a Secret in the resource's namespace holding `endpoint`,
+    /// `accessKey` and `secretKey` (optional: `region`, `insecure`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret_ref: Option<String>,
+    /// Name of a cluster-scoped ClusterConnection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cluster_ref: Option<String>,
+}
+
+impl ConnectionRef {
+    /// Connection via a Secret in the resource's own namespace.
+    pub fn local(secret: impl Into<String>) -> Self {
+        Self {
+            secret_ref: Some(secret.into()),
+            cluster_ref: None,
+        }
+    }
+
+    /// Connection via a cluster-scoped ClusterConnection.
+    pub fn cluster(name: impl Into<String>) -> Self {
+        Self {
+            secret_ref: None,
+            cluster_ref: Some(name.into()),
+        }
+    }
+}
+
+/// A centrally managed connection to a RustFS server. Cluster-scoped; the
+/// referenced credentials Secret lives in the operator's own namespace, so
+/// application namespaces never see admin credentials.
+#[derive(CustomResource, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[kube(
+    group = "rustfs.com",
+    version = "v1alpha1",
+    kind = "ClusterConnection",
+    shortname = "rfcc",
+    printcolumn = r#"{"name":"Endpoint","type":"string","jsonPath":".spec.endpoint"}"#
+)]
+#[serde(rename_all = "camelCase")]
+pub struct ClusterConnectionSpec {
+    /// RustFS endpoint URL, e.g. `http://rustfs.storage.svc:9000`.
+    pub endpoint: String,
+    /// Name of the Secret in the operator's namespace holding `accessKey`
+    /// and `secretKey`.
+    pub credentials_secret_ref: String,
+    /// AWS region; defaults to `us-east-1`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
+    /// Skip TLS verification.
+    #[serde(default)]
+    pub insecure: bool,
+    /// Namespaces whose resources may use this connection.
+    /// Absent means all namespaces are allowed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_namespaces: Option<Vec<String>>,
+}
+
+impl ClusterConnectionSpec {
+    /// Whether resources in `namespace` may use this connection.
+    pub fn allows_namespace(&self, namespace: &str) -> bool {
+        match &self.allowed_namespaces {
+            None => true,
+            Some(allowed) => allowed.iter().any(|n| n == namespace),
+        }
+    }
 }
 
 /// What happens to the remote resource when the CR is deleted.
@@ -207,5 +268,42 @@ impl Policy {
             .policy_name
             .as_deref()
             .unwrap_or_else(|| self.metadata.name.as_deref().unwrap_or_default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cc_spec(allowed: Option<Vec<&str>>) -> ClusterConnectionSpec {
+        ClusterConnectionSpec {
+            endpoint: "http://rustfs:9000".into(),
+            credentials_secret_ref: "rustfs-admin".into(),
+            region: None,
+            insecure: false,
+            allowed_namespaces: allowed.map(|v| v.iter().map(|s| s.to_string()).collect()),
+        }
+    }
+
+    #[test]
+    fn absent_allowed_namespaces_allows_all() {
+        assert!(cc_spec(None).allows_namespace("anything"));
+    }
+
+    #[test]
+    fn allowed_namespaces_is_an_exact_allowlist() {
+        let spec = cc_spec(Some(vec!["team-a", "team-b"]));
+        assert!(spec.allows_namespace("team-a"));
+        assert!(!spec.allows_namespace("team-c"));
+        // empty list denies everything
+        assert!(!cc_spec(Some(vec![])).allows_namespace("team-a"));
+    }
+
+    #[test]
+    fn connection_ref_yaml_forms_deserialize() {
+        let local: ConnectionRef = serde_yaml::from_str("secretRef: conn").unwrap();
+        assert_eq!(local, ConnectionRef::local("conn"));
+        let cluster: ConnectionRef = serde_yaml::from_str("clusterRef: prod").unwrap();
+        assert_eq!(cluster, ConnectionRef::cluster("prod"));
     }
 }

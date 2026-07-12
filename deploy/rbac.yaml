@@ -15,7 +15,11 @@ rules:
   - apiGroups: ["rustfs.com"]
     resources: ["buckets/status", "users/status", "policies/status"]
     verbs: ["get", "patch", "update"]
-  # connection and user-credential secrets
+  - apiGroups: ["rustfs.com"]
+    resources: ["clusterconnections"]
+    verbs: ["get", "list", "watch"]
+  # connection and user-credential secrets (can be scoped to the operator
+  # namespace with a Role if only ClusterConnection is used; see Helm chart)
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get"]

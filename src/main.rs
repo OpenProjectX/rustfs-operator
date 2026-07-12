@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use kube::CustomResourceExt;
 
-use rustfs_operator::crd::{Bucket, Policy, User};
+use rustfs_operator::crd::{Bucket, ClusterConnection, Policy, User};
 use rustfs_operator::reconcile;
 
 #[derive(Parser)]
@@ -23,7 +23,12 @@ enum Command {
 async fn main() -> anyhow::Result<()> {
     match Cli::parse().command.unwrap_or(Command::Run) {
         Command::Crd => {
-            let crds = [Bucket::crd(), User::crd(), Policy::crd()];
+            let crds = [
+                Bucket::crd(),
+                User::crd(),
+                Policy::crd(),
+                ClusterConnection::crd(),
+            ];
             let docs: Vec<String> = crds
                 .iter()
                 .map(serde_yaml::to_string)

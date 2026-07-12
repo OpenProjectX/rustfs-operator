@@ -103,9 +103,7 @@ mod tests {
 
     fn spec(policies: &[&str], enabled: bool) -> UserSpec {
         UserSpec {
-            connection: ConnectionRef {
-                secret_ref: "conn".into(),
-            },
+            connection: ConnectionRef::local("conn"),
             access_key: None,
             secret_key_ref: SecretKeyRef {
                 name: "creds".into(),

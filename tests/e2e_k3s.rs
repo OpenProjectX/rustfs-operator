@@ -9,7 +9,7 @@ mod common;
 
 use std::time::Duration;
 
-use k8s_openapi::api::core::v1::Secret;
+use k8s_openapi::api::core::v1::{Namespace, Secret};
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use kube::api::{DeleteParams, PostParams};
 use kube::config::{KubeConfigOptions, Kubeconfig};
@@ -20,8 +20,8 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::k3s::{K3s, KUBE_SECURE_PORT};
 
 use rustfs_operator::crd::{
-    Bucket, BucketSpec, ConnectionRef, DeletionPolicy, Policy, PolicySpec, SecretKeyRef, User,
-    UserSpec,
+    Bucket, BucketSpec, ClusterConnection, ClusterConnectionSpec, ConnectionRef, DeletionPolicy,
+    Policy, PolicySpec, SecretKeyRef, User, UserSpec,
 };
 use rustfs_operator::provider::RustFs;
 use rustfs_operator::reconcile;
@@ -102,7 +102,12 @@ async fn operator_reconciles_crs_against_rustfs() {
 
     // --- install CRDs and wait until they are served ---
     let crds: Api<CustomResourceDefinition> = Api::all(client.clone());
-    for crd in [Bucket::crd(), User::crd(), Policy::crd()] {
+    for crd in [
+        Bucket::crd(),
+        User::crd(),
+        Policy::crd(),
+        ClusterConnection::crd(),
+    ] {
         crds.create(&PostParams::default(), &crd)
             .await
             .expect("failed to create CRD");
@@ -138,9 +143,7 @@ async fn operator_reconciles_crs_against_rustfs() {
         .await
         .expect("create user creds secret");
 
-    let conn = ConnectionRef {
-        secret_ref: "rustfs-conn".into(),
-    };
+    let conn = ConnectionRef::local("rustfs-conn");
 
     // --- apply CRs: Policy, User (attached), Bucket ---
     policies
@@ -288,6 +291,112 @@ async fn operator_reconciles_crs_against_rustfs() {
         matches!(fs.get_policy("e2e-policy").await, Ok(None))
     })
     .await;
+
+    // ================= ClusterConnection =================
+    // Admin credentials live only in the operator's namespace (the kube
+    // client's default namespace, "default" in this test).
+    let mut admin_creds = Secret::default();
+    admin_creds.metadata.name = Some("rustfs-admin".into());
+    admin_creds.string_data = Some(
+        [
+            ("accessKey".to_string(), common::ADMIN_KEY.to_string()),
+            ("secretKey".to_string(), common::ADMIN_SECRET.to_string()),
+        ]
+        .into(),
+    );
+    secrets
+        .create(&PostParams::default(), &admin_creds)
+        .await
+        .expect("create admin creds secret");
+
+    let cluster_connections: Api<ClusterConnection> = Api::all(client.clone());
+    cluster_connections
+        .create(
+            &PostParams::default(),
+            &ClusterConnection::new(
+                "prod",
+                ClusterConnectionSpec {
+                    endpoint: endpoint.clone(),
+                    credentials_secret_ref: "rustfs-admin".into(),
+                    region: None,
+                    insecure: false,
+                    allowed_namespaces: Some(vec![NS.into()]),
+                },
+            ),
+        )
+        .await
+        .expect("create ClusterConnection");
+
+    // happy path: bucket via clusterRef converges and cleans up
+    buckets
+        .create(
+            &PostParams::default(),
+            &Bucket::new(
+                "cc-bucket",
+                BucketSpec {
+                    connection: ConnectionRef::cluster("prod"),
+                    bucket_name: None,
+                    versioning: None,
+                    quota_bytes: None,
+                    deletion_policy: DeletionPolicy::Delete,
+                },
+            ),
+        )
+        .await
+        .expect("create clusterRef Bucket CR");
+    eventually("clusterRef bucket exists in RustFS", 120, || async {
+        fs.bucket_exists("cc-bucket").await.unwrap_or(false)
+    })
+    .await;
+    buckets
+        .delete("cc-bucket", &DeleteParams::default())
+        .await
+        .expect("delete clusterRef Bucket CR");
+    eventually("clusterRef bucket removed from RustFS", 120, || async {
+        !fs.bucket_exists("cc-bucket").await.unwrap_or(true)
+    })
+    .await;
+
+    // denied path: a namespace outside allowedNamespaces is rejected
+    let namespaces: Api<Namespace> = Api::all(client.clone());
+    let mut team_ns = Namespace::default();
+    team_ns.metadata.name = Some("team-x".into());
+    namespaces
+        .create(&PostParams::default(), &team_ns)
+        .await
+        .expect("create team-x namespace");
+    let denied_buckets: Api<Bucket> = Api::namespaced(client.clone(), "team-x");
+    denied_buckets
+        .create(
+            &PostParams::default(),
+            &Bucket::new(
+                "denied-bucket",
+                BucketSpec {
+                    connection: ConnectionRef::cluster("prod"),
+                    bucket_name: None,
+                    versioning: None,
+                    quota_bytes: None,
+                    // Retain: cleanup must not need the (denied) connection
+                    deletion_policy: DeletionPolicy::Retain,
+                },
+            ),
+        )
+        .await
+        .expect("create denied Bucket CR");
+    eventually("denied bucket reports not allowed", 60, || async {
+        denied_buckets
+            .get("denied-bucket")
+            .await
+            .ok()
+            .and_then(|b| b.status)
+            .map(|s| !s.ready && s.message.unwrap_or_default().contains("not allowed"))
+            .unwrap_or(false)
+    })
+    .await;
+    assert!(
+        !fs.bucket_exists("denied-bucket").await.unwrap(),
+        "denied bucket must not be created in RustFS"
+    );
 
     controller.abort();
 }

@@ -128,9 +128,7 @@ mod tests {
 
     fn spec(document: serde_json::Value) -> PolicySpec {
         PolicySpec {
-            connection: ConnectionRef {
-                secret_ref: "conn".into(),
-            },
+            connection: ConnectionRef::local("conn"),
             policy_name: None,
             document,
             deletion_policy: DeletionPolicy::default(),

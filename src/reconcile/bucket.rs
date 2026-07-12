@@ -88,9 +88,7 @@ mod tests {
 
     fn spec(versioning: Option<bool>, quota_bytes: Option<u64>) -> BucketSpec {
         BucketSpec {
-            connection: ConnectionRef {
-                secret_ref: "conn".into(),
-            },
+            connection: ConnectionRef::local("conn"),
             bucket_name: None,
             versioning,
             quota_bytes,

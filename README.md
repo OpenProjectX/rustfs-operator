@@ -8,26 +8,40 @@ the [`rc-core`](https://crates.io/crates/rc-core) /
 
 ## CRDs (`rustfs.com/v1alpha1`)
 
-| Kind     | Short name | Manages                                             |
-|----------|------------|-----------------------------------------------------|
-| `Bucket` | `rfb`      | bucket existence, versioning, hard quota            |
-| `User`   | `rfu`      | IAM user, enabled/disabled, attached policies       |
-| `Policy` | `rfp`      | IAM policy document (inline YAML/JSON)              |
+| Kind                | Short name | Scope      | Manages                                       |
+|---------------------|------------|------------|-----------------------------------------------|
+| `Bucket`            | `rfb`      | namespaced | bucket existence, versioning, hard quota      |
+| `User`              | `rfu`      | namespaced | IAM user, enabled/disabled, attached policies |
+| `Policy`            | `rfp`      | namespaced | IAM policy document (inline YAML/JSON)        |
+| `ClusterConnection` | `rfcc`     | cluster    | centrally managed RustFS server connection    |
 
-Every resource references a connection Secret in its own namespace:
+Namespaced resources select a RustFS server via `spec.connection`, in one of
+two mutually exclusive ways:
+
+**Centrally managed (recommended for multi-tenant clusters)** — reference a
+cluster-scoped `ClusterConnection`; the admin credentials Secret lives only
+in the operator's namespace, and `allowedNamespaces` restricts who may use
+it:
 
 ```yaml
-stringData:
-  endpoint: http://rustfs.storage.svc:9000
-  accessKey: rustfsadmin
-  secretKey: rustfsadmin
-  # region: us-east-1   # optional
-  # insecure: "true"    # optional
+spec:
+  connection:
+    clusterRef: prod
 ```
 
-See `deploy/example.yaml` for a complete example. Each resource supports
-`deletionPolicy: Delete` (default; the remote resource is removed via
-finalizer when the CR is deleted) or `Retain`.
+**Self-service** — reference a connection Secret in the resource's own
+namespace (keys: `endpoint`, `accessKey`, `secretKey`; optional `region`,
+`insecure`):
+
+```yaml
+spec:
+  connection:
+    secretRef: rustfs-conn
+```
+
+See `deploy/example.yaml` for complete examples of both. Each resource
+supports `deletionPolicy: Delete` (default; the remote resource is removed
+via finalizer when the CR is deleted) or `Retain`.
 
 ## Install
 
