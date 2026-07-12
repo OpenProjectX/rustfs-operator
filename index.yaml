@@ -2,6 +2,23 @@ apiVersion: v1
 entries:
   rustfs-operator:
   - apiVersion: v2
+    appVersion: 0.2.0
+    created: "2026-07-12T03:39:25.262857333Z"
+    description: Kubernetes operator managing RustFS buckets, IAM users and policies
+    digest: d3faf96ac69004c1652aec5a4d0fda6cd42cd7f65cc0cebfac5a70ff76f7fa0b
+    home: https://github.com/OpenProjectX/rustfs-operator
+    keywords:
+    - rustfs
+    - s3
+    - operator
+    name: rustfs-operator
+    sources:
+    - https://github.com/OpenProjectX/rustfs-operator
+    type: application
+    urls:
+    - https://github.com/OpenProjectX/rustfs-operator/releases/download/rustfs-operator-0.2.0/rustfs-operator-0.2.0.tgz
+    version: 0.2.0
+  - apiVersion: v2
     appVersion: 0.1.0
     created: "2026-07-11T14:52:01.911903197Z"
     description: Kubernetes operator managing RustFS buckets, IAM users and policies
@@ -18,4 +35,4 @@ entries:
     urls:
     - https://github.com/OpenProjectX/rustfs-operator/releases/download/rustfs-operator-0.1.0/rustfs-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2026-07-11T14:52:01.91191209Z"
+generated: "2026-07-12T03:39:25.262868855Z"
