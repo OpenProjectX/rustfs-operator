@@ -100,6 +100,14 @@ build and attach a linux-amd64 binary.
 
 - **Reconcile loop**: finalizer-based; drift is re-checked every 5 minutes,
   errors retry after 15s and are reported in `.status.message`.
+- **CLI-equivalent logging**: every RustFS API call logs the equivalent
+  [rustfs-cli](https://github.com/rustfs/cli) command under the `rc_cli`
+  target (e.g. `equivalent: rc admin user add $ALIAS spark ****`), with
+  credentials redacted. `$ALIAS` is an `rc alias` with the admin
+  credentials, `$USER_ALIAS` one with the acting user's credentials.
+  Shown at the default log level; silence with `RUST_LOG=info,rc_cli=warn`
+  or set `RUST_LOG=rc_cli=info` to see only these lines. Policy documents
+  are logged at `debug`.
 - **User passwords** are only applied at user creation; RustFS cannot
   update them in place. Rotate credentials by rotating AccessKeys instead
   (delete/recreate the AccessKey CR).

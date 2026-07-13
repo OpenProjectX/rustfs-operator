@@ -116,6 +116,14 @@ impl RustFsProvider {
         Ok(Self { s3, admin, info })
     }
 
+    /// Log the equivalent rustfs-cli invocation for an API call.
+    /// `$ALIAS` stands for an `rc alias` configured with the admin
+    /// credentials; `$USER_ALIAS` for one configured with the acting
+    /// user's credentials. Filter with RUST_LOG=rc_cli=info.
+    fn cli(cmd: &str) {
+        tracing::info!(target: "rc_cli", "equivalent: rc {cmd}");
+    }
+
     /// Admin client authenticated as a regular user (for service-account
     /// operations, which RustFS scopes to the calling identity).
     fn client_as(&self, username: &str, password: &str) -> Result<AdminClient> {
@@ -154,14 +162,17 @@ fn optional<T>(res: rc_core::Result<T>) -> Result<Option<T>> {
 #[async_trait]
 impl RustFs for RustFsProvider {
     async fn bucket_exists(&self, bucket: &str) -> Result<bool> {
+        Self::cli(&format!("stat $ALIAS/{bucket}"));
         Ok(self.s3.bucket_exists(bucket).await?)
     }
 
     async fn create_bucket(&self, bucket: &str) -> Result<()> {
+        Self::cli(&format!("mb $ALIAS/{bucket}"));
         Ok(self.s3.create_bucket(bucket).await?)
     }
 
     async fn delete_bucket(&self, bucket: &str) -> Result<()> {
+        Self::cli(&format!("rb $ALIAS/{bucket}"));
         match self.s3.delete_bucket(bucket).await {
             Ok(()) => Ok(()),
             Err(e) => absent(e),
@@ -169,14 +180,18 @@ impl RustFs for RustFsProvider {
     }
 
     async fn get_versioning(&self, bucket: &str) -> Result<Option<bool>> {
+        Self::cli(&format!("version info $ALIAS/{bucket}"));
         Ok(self.s3.get_versioning(bucket).await?)
     }
 
     async fn set_versioning(&self, bucket: &str, enabled: bool) -> Result<()> {
+        let verb = if enabled { "enable" } else { "suspend" };
+        Self::cli(&format!("version {verb} $ALIAS/{bucket}"));
         Ok(self.s3.set_versioning(bucket, enabled).await?)
     }
 
     async fn get_bucket_quota(&self, bucket: &str) -> Result<Option<u64>> {
+        Self::cli(&format!("quota info $ALIAS/{bucket}"));
         match optional(self.admin.get_bucket_quota(bucket).await)? {
             Some(q) => Ok(q.quota.filter(|q| *q > 0)),
             None => Ok(None),
@@ -184,20 +199,24 @@ impl RustFs for RustFsProvider {
     }
 
     async fn set_bucket_quota(&self, bucket: &str, quota: u64) -> Result<()> {
+        Self::cli(&format!("quota set $ALIAS/{bucket} {quota}"));
         self.admin.set_bucket_quota(bucket, quota).await?;
         Ok(())
     }
 
     async fn get_user(&self, access_key: &str) -> Result<Option<User>> {
+        Self::cli(&format!("admin user info $ALIAS {access_key}"));
         optional(self.admin.get_user(access_key).await)
     }
 
     async fn create_user(&self, access_key: &str, secret_key: &str) -> Result<()> {
+        Self::cli(&format!("admin user add $ALIAS {access_key} ****"));
         self.admin.create_user(access_key, secret_key).await?;
         Ok(())
     }
 
     async fn delete_user(&self, access_key: &str) -> Result<()> {
+        Self::cli(&format!("admin user rm $ALIAS {access_key}"));
         match self.admin.delete_user(access_key).await {
             Ok(()) => Ok(()),
             Err(e) => absent(e),
@@ -205,6 +224,8 @@ impl RustFs for RustFsProvider {
     }
 
     async fn set_user_status(&self, access_key: &str, enabled: bool) -> Result<()> {
+        let verb = if enabled { "enable" } else { "disable" };
+        Self::cli(&format!("admin user {verb} $ALIAS {access_key}"));
         let status = if enabled {
             UserStatus::Enabled
         } else {
@@ -214,6 +235,10 @@ impl RustFs for RustFsProvider {
     }
 
     async fn set_user_policies(&self, user: &str, policies: &[String]) -> Result<()> {
+        Self::cli(&format!(
+            "admin policy attach $ALIAS {} --user {user}",
+            policies.join(",")
+        ));
         Ok(self
             .admin
             .attach_policy(policies, PolicyEntity::User, user)
@@ -221,14 +246,18 @@ impl RustFs for RustFsProvider {
     }
 
     async fn get_policy(&self, name: &str) -> Result<Option<Policy>> {
+        Self::cli(&format!("admin policy info $ALIAS {name}"));
         optional(self.admin.get_policy(name).await)
     }
 
     async fn put_policy(&self, name: &str, document: &str) -> Result<()> {
+        Self::cli(&format!("admin policy create $ALIAS {name} policy.json"));
+        tracing::debug!(target: "rc_cli", "policy.json: {document}");
         Ok(self.admin.create_policy(name, document).await?)
     }
 
     async fn delete_policy(&self, name: &str) -> Result<()> {
+        Self::cli(&format!("admin policy rm $ALIAS {name}"));
         match self.admin.delete_policy(name).await {
             Ok(()) => Ok(()),
             Err(e) => absent(e),
@@ -245,6 +274,9 @@ impl RustFs for RustFsProvider {
         password: &str,
         access_key: &str,
     ) -> Result<Option<ServiceAccount>> {
+        Self::cli(&format!(
+            "admin service-account info $USER_ALIAS {access_key}  # $USER_ALIAS uses {username}'s credentials"
+        ));
         let client = self.client_as(username, password)?;
         optional(client.get_service_account(access_key).await)
     }
@@ -258,6 +290,14 @@ impl RustFs for RustFsProvider {
         description: Option<String>,
         policy: Option<String>,
     ) -> Result<()> {
+        Self::cli(&format!(
+            "admin service-account create $USER_ALIAS {access_key} ****{}  # $USER_ALIAS uses {username}'s credentials",
+            if policy.is_some() {
+                " --policy policy.json"
+            } else {
+                ""
+            }
+        ));
         let client = self.client_as(username, password)?;
         client
             .create_service_account(CreateServiceAccountRequest {
@@ -278,6 +318,7 @@ impl RustFs for RustFsProvider {
         password: &str,
         access_key: &str,
     ) -> Result<()> {
+        Self::cli(&format!("admin service-account rm $ALIAS {access_key}"));
         // Try as admin first (covers keys whose owner was already deleted),
         // fall back to the owning user.
         match self.admin.delete_service_account(access_key).await {

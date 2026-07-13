@@ -17,6 +17,10 @@ pub const RUSTFS_IMAGE: (&str, &str) = (
 /// feature is enabled). Call once at the start of each test.
 pub fn setup_test_env() {
     rustfs_operator::install_crypto_provider();
+    // Surface the operator's rc-CLI-equivalent log lines in test output.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("rc_cli=info")
+        .try_init();
     for var in [
         "HTTP_PROXY",
         "HTTPS_PROXY",
