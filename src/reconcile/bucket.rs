@@ -9,7 +9,7 @@ use kube::{Api, ResourceExt};
 use super::{Context, FINALIZER, REQUEUE_OK, namespace_of, patch_status};
 use crate::connection::provider_for;
 use crate::crd::{Bucket, BucketSpec, DeletionPolicy, ResourceStatus};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::provider::RustFs;
 
 /// Make the RustFS bucket match the spec. Pure logic, unit-testable.
@@ -49,7 +49,7 @@ pub async fn reconcile(obj: Arc<Bucket>, ctx: Arc<Context>) -> Result<Action> {
         }
     })
     .await
-    .map_err(|e| Error::Finalizer(e.to_string()))
+    .map_err(super::unwrap_finalizer_error)
 }
 
 async fn apply(obj: Arc<Bucket>, ctx: &Context) -> Result<Action> {

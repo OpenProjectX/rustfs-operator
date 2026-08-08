@@ -75,5 +75,6 @@ expect_fail $R 'users=[{"name":"a","connection":{"clusterRef":"p"}}]' "password 
 expect_fail $R 'users=[{"name":"a","connection":{"clusterRef":"p"},"password":"x","passwordRef":{"name":"y"}}]' "not both"
 expect_fail $R 'accessKeys=[{"name":"a","connection":{"clusterRef":"p"},"passwordFromUser":"u"}]' "'user' (the owning RustFS username) is required"
 expect_fail $R 'accessKeys=[{"name":"a","user":"u","connection":{"clusterRef":"p"}}]' "password source is required"
+expect_fail $R 'accessKeys=[{"name":"a","user":"spark","accessKey":"spark","connection":{"clusterRef":"p"},"passwordFromUser":"spark"}]' "must differ from the owning username"
 
 echo "chart-tests OK"

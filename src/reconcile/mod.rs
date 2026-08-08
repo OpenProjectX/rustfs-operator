@@ -24,6 +24,9 @@ use crate::error::{Error, Result};
 pub const REQUEUE_OK: Duration = Duration::from_secs(300);
 /// Retry delay after a failed reconciliation.
 pub const REQUEUE_ERR: Duration = Duration::from_secs(15);
+/// Retry delay for errors that only a spec change can fix. Retrying these at
+/// [`REQUEUE_ERR`] just burns API calls until a human edits the resource.
+pub const REQUEUE_CONFIG_ERR: Duration = Duration::from_secs(300);
 /// Finalizer added to every managed resource.
 pub const FINALIZER: &str = "rustfs.com/cleanup";
 
@@ -47,6 +50,17 @@ where
     }
 }
 
+/// Unwrap a finalizer failure back to the reconciler's own error, so
+/// `error_policy` can still classify it and `.status.message` is not buried
+/// under "finalizer error: failed to apply object: ...".
+pub fn unwrap_finalizer_error(err: kube::runtime::finalizer::Error<Error>) -> Error {
+    use kube::runtime::finalizer::Error as FinErr;
+    match err {
+        FinErr::ApplyFailed(e) | FinErr::CleanupFailed(e) => e,
+        other => Error::Finalizer(other.to_string()),
+    }
+}
+
 fn error_policy<K>(
     obj: Arc<K>,
     err: &Error,
@@ -61,7 +75,12 @@ where
         error = %err,
         "reconciliation failed"
     );
-    kube::runtime::controller::Action::requeue(REQUEUE_ERR)
+    let delay = if err.is_config_error() {
+        REQUEUE_CONFIG_ERR
+    } else {
+        REQUEUE_ERR
+    };
+    kube::runtime::controller::Action::requeue(delay)
 }
 
 /// Run the Bucket, User and Policy controllers until shutdown.

@@ -11,7 +11,7 @@ use rc_core::admin::UserStatus;
 use super::{Context, FINALIZER, REQUEUE_OK, namespace_of, patch_status};
 use crate::connection::{provider_for, secret_key_value};
 use crate::crd::{DeletionPolicy, ResourceStatus, User, UserSpec};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::provider::RustFs;
 
 /// Make the RustFS user match the spec. `password` is only used when the
@@ -66,7 +66,7 @@ pub async fn reconcile(obj: Arc<User>, ctx: Arc<Context>) -> Result<Action> {
         }
     })
     .await
-    .map_err(|e| Error::Finalizer(e.to_string()))
+    .map_err(super::unwrap_finalizer_error)
 }
 
 async fn apply(obj: Arc<User>, ctx: &Context) -> Result<Action> {

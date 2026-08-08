@@ -41,6 +41,22 @@ fn generate_secret_key() -> String {
     )
 }
 
+/// A RustFS user is itself an access key, so a service account may not reuse
+/// the owning username: the server then resolves the id to the user and fails
+/// the lookup with a 500 rather than a clean not-found, and no amount of
+/// retrying converges. Reject it before touching the API.
+fn reject_username_collision(access_key: &str, username: &str) -> Result<()> {
+    if access_key == username {
+        return Err(Error::Spec(format!(
+            "accessKey {access_key:?} must differ from the owning username: \
+             in RustFS a user is itself an access key, so the server cannot \
+             tell them apart. Pick another name, or omit accessKey to have \
+             one generated"
+        )));
+    }
+    Ok(())
+}
+
 /// Outcome of [`ensure_access_key`].
 #[derive(Debug, PartialEq)]
 pub enum KeyOutcome {
@@ -74,6 +90,7 @@ pub async fn ensure_access_key(
         .transpose()?;
 
     if let Some(ak) = known_ak {
+        reject_username_collision(ak, username)?;
         let exists = fs.get_access_key(username, password, ak).await?.is_some();
         if exists && secret_intact {
             return Ok(KeyOutcome::Kept {
@@ -125,6 +142,9 @@ pub async fn cleanup_access_key(
     spec: &AccessKeySpec,
 ) -> Result<()> {
     match (spec.deletion_policy, access_key) {
+        // A colliding key was never created, and asking the server to revoke
+        // an id that resolves to the user itself is not worth the risk.
+        (DeletionPolicy::Delete, Some(ak)) if ak == username => Ok(()),
         (DeletionPolicy::Delete, Some(ak)) => fs.delete_access_key(username, password, ak).await,
         _ => Ok(()),
     }
@@ -140,7 +160,7 @@ pub async fn reconcile(obj: Arc<AccessKey>, ctx: Arc<Context>) -> Result<Action>
         }
     })
     .await
-    .map_err(|e| Error::Finalizer(e.to_string()))
+    .map_err(super::unwrap_finalizer_error)
 }
 
 /// Whether the target Secret currently holds credentials for `ak`.
@@ -395,6 +415,34 @@ mod tests {
             KeyOutcome::Issued { access_key, .. } => assert_eq!(access_key, "AK1"),
             other => panic!("expected Issued, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn access_key_equal_to_username_is_rejected_without_api_calls() {
+        let fs = MockRustFs::new(); // any call panics
+        let err = ensure_access_key(
+            &fs,
+            "spark",
+            "pw",
+            Some("spark"),
+            false,
+            &spec(Some("spark")),
+        )
+        .await
+        .expect_err("collision must be rejected");
+        assert!(err.is_config_error(), "should not be retried hot: {err}");
+        assert!(
+            err.to_string()
+                .contains("must differ from the owning username")
+        );
+    }
+
+    #[tokio::test]
+    async fn cleanup_skips_revoking_a_colliding_key() {
+        let fs = MockRustFs::new(); // delete_access_key must not be called
+        cleanup_access_key(&fs, "spark", "pw", Some("spark"), &spec(Some("spark")))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

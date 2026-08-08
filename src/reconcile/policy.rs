@@ -87,7 +87,7 @@ pub async fn reconcile(obj: Arc<Policy>, ctx: Arc<Context>) -> Result<Action> {
         }
     })
     .await
-    .map_err(|e| Error::Finalizer(e.to_string()))
+    .map_err(super::unwrap_finalizer_error)
 }
 
 async fn apply(obj: Arc<Policy>, ctx: &Context) -> Result<Action> {

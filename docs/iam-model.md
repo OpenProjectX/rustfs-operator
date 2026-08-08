@@ -70,6 +70,26 @@ always exactly two levels deep: user → access keys.
 create keys, not *for whom*. This is deliberate — otherwise any holder of
 that action could mint a root-parented key and escalate to full ownership.
 
+### An access key may not reuse the username
+
+Because the username is already an access key id, naming a service account
+after its owner collides. The server resolves the id to the user, fails to
+load it as a service account, and returns a 500 instead of a clean
+not-found:
+
+```console
+$ rc admin service-account info $USER_ALIAS spark     # spark is also the username
+✗ HTTP 500: <Code>InternalError</Code><Message>get service account failed</Message>
+
+$ rc admin service-account info $USER_ALIAS spark-ak
+✗ Service account 'spark-ak' not found                # clean miss
+```
+
+Nothing converges this by retrying, so the operator rejects
+`accessKey == user` up front as a spec error, and the `rustfs-resources`
+chart fails at render time. Pick any other name, or omit `accessKey` and
+let the operator generate one.
+
 ## Do you need an AccessKey at all?
 
 Since a user's own credentials already work for S3, you can point an

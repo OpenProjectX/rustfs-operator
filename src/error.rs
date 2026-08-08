@@ -19,3 +19,11 @@ pub enum Error {
     #[error("finalizer error: {0}")]
     Finalizer(String),
 }
+
+impl Error {
+    /// Whether this error can only be resolved by editing the resource (or
+    /// the Secret it points at) rather than by retrying against the server.
+    pub fn is_config_error(&self) -> bool {
+        matches!(self, Error::Spec(_) | Error::Connection(_))
+    }
+}

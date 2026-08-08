@@ -15,6 +15,10 @@
 {{- if and (eq $fromUser "") (eq $refName "") }}
 {{- fail (printf "%s: a password source is required; set passwordRef or passwordFromUser (a users[] entry with inline password)" $id) }}
 {{- end }}
+{{- $ak := .accessKey | default "" }}
+{{- if and (ne $ak "") (eq $ak $user) }}
+{{- fail (printf "%s: accessKey %q must differ from the owning username; in RustFS a user is itself an access key, so reusing the name collides and the server rejects the lookup. Pick another name or omit accessKey to have one generated" $id $ak) }}
+{{- end }}
 ---
 apiVersion: rustfs.com/v1alpha1
 kind: AccessKey
