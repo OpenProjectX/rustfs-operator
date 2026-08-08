@@ -8,11 +8,13 @@ RustFS 1.0.0-beta.8.
 ## Users and access keys are two different things
 
 A **user** is an identity: a username and a password. It is what policies
-attach to. A user's password is not an S3 credential — you cannot sign S3
-requests with it.
+attach to. The credential pair *is* the identity — the username doubles as
+an access key and the password as its secret key, which is why
+`rc admin user info` prints `Access Key: <username>`. You can sign S3
+requests with them directly.
 
-An **access key** (RustFS calls it a *service account*) is an AK/SK pair
-that S3 clients actually authenticate with. One user can own many of them.
+An **access key** (RustFS calls it a *service account*) is an additional
+AK/SK pair derived from a user. One user can own many of them.
 
 ```
 User "spark"  (username + password, policies attached here)
@@ -68,6 +70,28 @@ always exactly two levels deep: user → access keys.
 create keys, not *for whom*. This is deliberate — otherwise any holder of
 that action could mint a root-parented key and escalate to full ownership.
 
+## Do you need an AccessKey at all?
+
+Since a user's own credentials already work for S3, you can point an
+application straight at the `User` username/password and skip `AccessKey`
+entirely. That is a legitimate setup, and it avoids the password plumbing
+described below. What you give up:
+
+- **One identity, one credential.** Two applications sharing a user share a
+  secret, and rotating it breaks both at once. Access keys give each
+  consumer its own independently revocable pair.
+- **Independent lifecycle.** Deleting an access key does not disturb the
+  user; rotating the user's password does not disturb its access keys.
+- **Narrower scoping.** An access key can carry an embedded policy that
+  further restricts it below the user's own permissions. A user credential
+  always carries the user's full permissions.
+- **Expiry.** Access keys can be given an expiration; user credentials
+  cannot.
+
+Rule of thumb: one workload per identity is fine on the user credential;
+several workloads, or anything needing per-consumer revocation or reduced
+scope, wants access keys.
+
 ## Why `AccessKey` needs the user's password
 
 The operator authenticates **as the user** to issue that user's keys, which
@@ -101,9 +125,13 @@ identity, since the CLI cannot send `targetUser` either.
 
 ## Other server behaviours worth knowing
 
-- **Passwords cannot be changed in place.** `spec.password` is applied only
-  when the user is created. Rotate credentials by replacing `AccessKey`
-  resources instead.
+- **Passwords *can* be changed in place**, contrary to what earlier versions
+  of these docs said. Re-issuing `admin user add` for an existing user
+  replaces the password: the old one immediately returns
+  `SignatureDoesNotMatch`, while attached policies and existing access keys
+  survive untouched. The operator nonetheless applies `spec.password` only
+  at creation — a deliberate choice, not a server limitation — so editing
+  the password Secret does not currently rotate anything.
 - **Policy attachment is replace-all.** RustFS's `set-user-or-group-policy`
   endpoint has no attach/detach split, so `User.spec.policies` is fully
   declarative: whatever you list is exactly what ends up attached.

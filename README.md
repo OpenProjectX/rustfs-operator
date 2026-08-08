@@ -121,9 +121,11 @@ build and attach a linux-amd64 binary.
   Shown at the default log level; silence with `RUST_LOG=info,rc_cli=warn`
   or set `RUST_LOG=rc_cli=info` to see only these lines. Policy documents
   are logged at `debug`.
-- **User passwords** are only applied at user creation; RustFS cannot
-  update them in place. Rotate credentials by rotating AccessKeys instead
-  (delete/recreate the AccessKey CR).
+- **User passwords** are only applied at user creation, so editing the
+  password Secret does not rotate anything. This is an operator choice, not
+  a server limit — RustFS does replace a password when the user is
+  re-created, keeping policies and access keys intact. Rotate credentials by
+  replacing the AccessKey CR.
 - **Policies in use cannot be deleted**: RustFS rejects deleting a policy
   that is still attached; the Policy CR reports the error and retries.
 - **Policy attachment** uses RustFS's `set-user-or-group-policy` endpoint,

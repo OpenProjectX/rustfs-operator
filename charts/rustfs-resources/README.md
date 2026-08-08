@@ -65,7 +65,10 @@ remote resource is removed when the CR is deleted; use `Retain` to keep it.
 release namespace. Alternatively set `password` inline and the chart
 creates `<release>-user-<name>` — but it then lives in the Helm release
 values; prefer `passwordRef` in production. Passwords are only applied when
-the user is first created (RustFS cannot update them in place).
+the user is first created, so changing one later has no effect. Note the
+username/password pair is itself a working S3 credential — an `accessKeys[]`
+entry is only needed for per-consumer or reduced-scope credentials
+(see [docs/iam-model.md](../../docs/iam-model.md)).
 
 **Access keys**: each `accessKeys[]` entry issues an AK/SK pair owned by
 `user`; the operator writes the generated credentials to a Secret (default

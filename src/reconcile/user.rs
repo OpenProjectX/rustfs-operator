@@ -15,7 +15,11 @@ use crate::error::{Error, Result};
 use crate::provider::RustFs;
 
 /// Make the RustFS user match the spec. `password` is only used when the
-/// user does not exist yet; RustFS cannot update passwords in place.
+/// user does not exist yet, so editing the password Secret does not rotate
+/// the credential. RustFS itself does support replacing a password (via the
+/// same create call, leaving policies and access keys intact); reconciling
+/// it here would silently invalidate credentials already in use, so it is
+/// left out deliberately.
 pub async fn ensure_user(
     fs: &dyn RustFs,
     username: &str,
