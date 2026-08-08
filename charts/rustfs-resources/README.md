@@ -67,12 +67,17 @@ creates `<release>-user-<name>` — but it then lives in the Helm release
 values; prefer `passwordRef` in production. Passwords are only applied when
 the user is first created (RustFS cannot update them in place).
 
-**Access keys**: each `accessKeys[]` entry issues an AK/SK pair for `user`;
-the operator writes the generated credentials to a Secret (default
-`<name>-credentials`). `passwordFromUser: <users[] entry>` reuses the
-password Secret this chart created for that user. The user's policies must
-allow `admin:CreateServiceAccount`, `admin:ListServiceAccounts` and
-`admin:RemoveServiceAccount`.
+**Access keys**: each `accessKeys[]` entry issues an AK/SK pair owned by
+`user`; the operator writes the generated credentials to a Secret (default
+`<name>-credentials`). The key inherits that user's policies, so grant
+access via `users[].policies` rather than per key.
+
+The password is needed because the operator authenticates as the user to
+issue its keys: set `passwordRef`, or `passwordFromUser: <users[] entry>` to
+reuse the password Secret this chart created for that user. For the same
+reason the user's policies must allow `admin:CreateServiceAccount`,
+`admin:ListServiceAccounts` and `admin:RemoveServiceAccount` over itself.
+See [docs/iam-model.md](../../docs/iam-model.md).
 
 ## Prerequisites
 

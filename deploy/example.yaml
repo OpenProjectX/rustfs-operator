@@ -84,11 +84,13 @@ spec:
   policies: ["app-data-rw"]
   enabled: true
 ---
-# An AK/SK credential pair for app-user. The operator issues it in RustFS
-# (authenticating as the user) and writes accessKey/secretKey/endpoint into
-# the Secret "app-key-credentials" (owner-referenced, GC'd with the CR).
+# An AK/SK credential pair owned by app-user, inheriting its policies. The
+# operator issues it in RustFS (authenticating as the user, hence the
+# password) and writes accessKey/secretKey/endpoint into the Secret
+# "app-key-credentials" (owner-referenced, GC'd with the CR).
 # NOTE: the user's policies must include admin:CreateServiceAccount,
 # admin:ListServiceAccounts and admin:RemoveServiceAccount.
+# See docs/iam-model.md for the full model.
 apiVersion: rustfs.com/v1alpha1
 kind: AccessKey
 metadata:

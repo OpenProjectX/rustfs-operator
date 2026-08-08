@@ -17,14 +17,27 @@ the [`rc-core`](https://crates.io/crates/rc-core) /
 | `ClusterConnection` | `rfcc`     | cluster    | centrally managed RustFS server connection             |
 
 The IAM model mirrors RustFS: a **User** is an identity (username/password)
-that policies attach to; applications authenticate with **AccessKeys**
-(a user can have many). The operator issues each AccessKey while
-authenticated *as the user* and writes the generated `accessKey`/
-`secretKey`/`endpoint` into a Secret in the CR's namespace, owner-referenced
-so it is garbage-collected with the CR. If that Secret is lost, the key is
-revoked and reissued. For a user to manage its own keys, its policies must
-allow `admin:CreateServiceAccount`, `admin:ListServiceAccounts` and
+that policies attach to, and applications authenticate with **AccessKeys** —
+AK/SK pairs owned by that user, which inherit its policies. A user can own
+many. The password is not an S3 credential; the access keys are.
+
+```
+User "spark"  (policies attach here)
+ ├── AccessKey → Secret spark-etl-credentials
+ └── AccessKey → Secret spark-adhoc-credentials
+```
+
+The operator writes each generated `accessKey`/`secretKey`/`endpoint` into a
+Secret in the CR's namespace, owner-referenced so it is garbage-collected
+with the CR; if that Secret is lost the key is revoked and reissued. Keys
+are issued while authenticated *as the owning user*, so an AccessKey needs
+the user's password and the user's policies must allow
+`admin:CreateServiceAccount`, `admin:ListServiceAccounts` and
 `admin:RemoveServiceAccount`.
+
+**See [docs/iam-model.md](docs/iam-model.md)** for how parenting works, why
+the password is required (a client-library gap, not a server one), and how
+to inspect identities with `rc`.
 
 Namespaced resources select a RustFS server via `spec.connection`, in one of
 two mutually exclusive ways:
