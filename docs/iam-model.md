@@ -46,12 +46,16 @@ the `AccessKey`.
 
 The server's `add-service-account` API decides the parent like this:
 
-| Caller | `targetUser` sent? | Resulting parent |
-|--------|--------------------|------------------|
-| Any user | no | the caller itself |
-| A service account | no | the caller's **parent user**, not the calling key |
-| Root / owner | yes | the named user |
-| Non-owner | yes | rejected — `service account parent is outside requester scope` |
+| Caller | `targetUser` | Resulting parent |
+|--------|--------------|------------------|
+| Any user | omitted | the caller itself |
+| A service account | omitted | the caller's **parent user**, not the calling key |
+| Root / owner | any user | the named user |
+| Non-owner | itself or its own parent | that user (allowed) |
+| Non-owner | any other user | rejected — `service account parent is outside requester scope` |
+
+The guard is literally `owner || target_user == req_user || target_user ==
+req_parent_user`, so a non-owner is confined to its own scope.
 
 Two consequences are easy to trip over:
 
@@ -59,11 +63,10 @@ Two consequences are easy to trip over:
 key becomes a *sibling* of that key, not a child of it. The hierarchy is
 always exactly two levels deep: user → access keys.
 
-**Only the root credential may set `targetUser`.** The
+**Only the root credential may parent a key to someone else.** The
 `admin:CreateServiceAccount` permission controls *whether* a caller can
-create keys, not *for whom*; a non-owner is confined to its own scope. This
-is deliberate — otherwise any holder of that action could mint a
-root-parented key and escalate to full ownership.
+create keys, not *for whom*. This is deliberate — otherwise any holder of
+that action could mint a root-parented key and escalate to full ownership.
 
 ## Why `AccessKey` needs the user's password
 
