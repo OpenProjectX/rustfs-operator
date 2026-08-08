@@ -38,9 +38,9 @@ jobs:
       - name: Format
         run: cargo fmt --check
       - name: Clippy
-        run: cargo clippy --all-targets --features integration,e2e -- -D warnings
+        run: cargo clippy --locked --all-targets --features integration,e2e -- -D warnings
       - name: Unit tests
-        run: cargo test
+        run: cargo test --locked
 
   chart-tests:
     runs-on: ubuntu-latest
@@ -67,9 +67,9 @@ jobs:
           images: ${{ env.TEST_IMAGES }}
           cache-key: test-images-rustfs-beta8-k3s-1.34.9
       - name: Integration tests (RustFS container)
-        run: cargo test --features integration --test integration_rustfs
+        run: cargo test --locked --features integration --test integration_rustfs
       - name: E2E tests (k3s + RustFS containers)
-        run: cargo test --features e2e --test e2e_k3s
+        run: cargo test --locked --features e2e --test e2e_k3s
 
   # Validates the Dockerfile and seeds the buildx GHA cache on the default
   # branch, so tag-triggered release builds can restore it (Actions cache is

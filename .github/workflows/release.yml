@@ -61,7 +61,7 @@ jobs:
       - name: Build release binary
         if: vars.RELEASE_BINARY == 'true'
         run: |
-          cargo build --release --bin rustfs-operator
+          cargo build --release --locked --bin rustfs-operator
           cp target/release/rustfs-operator rustfs-operator-linux-amd64
       - uses: softprops/action-gh-release@v2
         with:

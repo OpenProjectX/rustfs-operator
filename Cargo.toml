@@ -1,6 +1,6 @@
 [package]
 name = "rustfs-operator"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2024"
 rust-version = "1.92"
 license = "MIT OR Apache-2.0"
@@ -8,8 +8,8 @@ description = "Kubernetes operator managing RustFS buckets, IAM users and polici
 
 [dependencies]
 # RustFS management-plane client
-rc-core = "0.1.24"
-rc-s3 = "0.1.24"
+rc-core = "0.1.31"
+rc-s3 = "0.1.31"
 
 # Kubernetes
 kube = { version = "4.0", default-features = false, features = ["client", "runtime", "derive", "rustls-tls", "ring"] }
