@@ -2,6 +2,23 @@ apiVersion: v1
 entries:
   rustfs-operator:
   - apiVersion: v2
+    appVersion: 0.7.0
+    created: "2026-09-04T01:31:51.491850995Z"
+    description: Kubernetes operator managing RustFS buckets, IAM users and policies
+    digest: d82f987582f881545ee69f20b1cc0a22df2be5d9a50420606377888c76ba0ad6
+    home: https://github.com/OpenProjectX/rustfs-operator
+    keywords:
+    - rustfs
+    - s3
+    - operator
+    name: rustfs-operator
+    sources:
+    - https://github.com/OpenProjectX/rustfs-operator
+    type: application
+    urls:
+    - https://github.com/OpenProjectX/rustfs-operator/releases/download/rustfs-operator-0.7.0/rustfs-operator-0.7.0.tgz
+    version: 0.7.0
+  - apiVersion: v2
     appVersion: 0.6.4
     created: "2026-08-08T11:15:50.96017425Z"
     description: Kubernetes operator managing RustFS buckets, IAM users and policies
@@ -207,6 +224,25 @@ entries:
     version: 0.1.0
   rustfs-operator-crds:
   - apiVersion: v2
+    appVersion: 0.7.0
+    created: "2026-09-04T01:31:51.690062127Z"
+    description: CustomResourceDefinitions for the rustfs-operator, managed as Helm
+      templates (upgradeable, value-controlled)
+    digest: 7596ef6074fecd3b398cc52124a58f72dac10698322eb9b7fd6d7e86c9cfad14
+    home: https://github.com/OpenProjectX/rustfs-operator
+    keywords:
+    - rustfs
+    - s3
+    - operator
+    - crds
+    name: rustfs-operator-crds
+    sources:
+    - https://github.com/OpenProjectX/rustfs-operator
+    type: application
+    urls:
+    - https://github.com/OpenProjectX/rustfs-operator/releases/download/rustfs-operator-crds-0.7.0/rustfs-operator-crds-0.7.0.tgz
+    version: 0.7.0
+  - apiVersion: v2
     appVersion: 0.6.4
     created: "2026-08-08T11:15:51.15219381Z"
     description: CustomResourceDefinitions for the rustfs-operator, managed as Helm
@@ -341,6 +377,24 @@ entries:
     version: 0.4.0
   rustfs-resources:
   - apiVersion: v2
+    appVersion: 0.7.0
+    created: "2026-09-04T01:31:51.924138335Z"
+    description: Declare RustFS resources (Buckets, Users, Policies) from Helm values,
+      reconciled by the rustfs-operator
+    digest: 63489162ee9ada05aac0cf8d831971ae52a13b48851b7e3dd4ea84fa777e1d8d
+    home: https://github.com/OpenProjectX/rustfs-operator
+    keywords:
+    - rustfs
+    - s3
+    - operator
+    name: rustfs-resources
+    sources:
+    - https://github.com/OpenProjectX/rustfs-operator
+    type: application
+    urls:
+    - https://github.com/OpenProjectX/rustfs-operator/releases/download/rustfs-resources-0.7.0/rustfs-resources-0.7.0.tgz
+    version: 0.7.0
+  - apiVersion: v2
     appVersion: 0.6.4
     created: "2026-08-08T11:15:51.359144043Z"
     description: Declare RustFS resources (Buckets, Users, Policies) from Helm values,
@@ -448,4 +502,4 @@ entries:
     urls:
     - https://github.com/OpenProjectX/rustfs-operator/releases/download/rustfs-resources-0.5.0/rustfs-resources-0.5.0.tgz
     version: 0.5.0
-generated: "2026-08-08T11:15:51.359242357Z"
+generated: "2026-09-04T01:31:51.924264242Z"
