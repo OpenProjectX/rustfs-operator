@@ -1,11 +1,11 @@
 //! AccessKey (service account) reconciliation.
 //!
-//! RustFS mints service accounts for the calling identity only, so the
-//! operator authenticates as the owning user (username + password from the
-//! spec) to issue keys. The generated AK/SK pair is written to a Secret in
-//! the CR's namespace, owner-referenced for garbage collection. Secret keys
-//! are only obtainable at creation time: if the target Secret disappears,
-//! the key is revoked and reissued.
+//! Keys are issued by the admin credential, which names the owning user with
+//! `targetUser`; the server accepts that only from an owner credential, so the
+//! operator's connection must hold root. The generated AK/SK pair is written
+//! to a Secret in the CR's namespace, owner-referenced for garbage collection.
+//! Secret keys are only obtainable at creation time: if the target Secret
+//! disappears, the key is revoked and reissued.
 
 use std::sync::Arc;
 
@@ -18,7 +18,7 @@ use kube::{Api, Resource, ResourceExt};
 use rand::Rng;
 
 use super::{Context, FINALIZER, REQUEUE_OK, namespace_of, patch_status};
-use crate::connection::{provider_for, secret_key_value};
+use crate::connection::provider_for;
 use crate::crd::{AccessKey, AccessKeySpec, AccessKeyStatus, DeletionPolicy};
 use crate::error::{Error, Result};
 use crate::provider::RustFs;
@@ -75,7 +75,6 @@ pub enum KeyOutcome {
 pub async fn ensure_access_key(
     fs: &dyn RustFs,
     username: &str,
-    password: &str,
     known_ak: Option<&str>,
     secret_intact: bool,
     spec: &AccessKeySpec,
@@ -89,9 +88,20 @@ pub async fn ensure_access_key(
         })
         .transpose()?;
 
+    if spec.password_ref.is_some() {
+        return Err(Error::Spec(
+            "passwordRef was removed in 0.7.0: access keys are now issued by the \
+             operator's admin credential using targetUser, so the owning user's \
+             password is no longer needed. Delete the field (and, if nothing else \
+             uses them, the admin:CreateServiceAccount / ListServiceAccounts / \
+             RemoveServiceAccount grants on that user)"
+                .into(),
+        ));
+    }
+
     if let Some(ak) = known_ak {
         reject_username_collision(ak, username)?;
-        let exists = fs.get_access_key(username, password, ak).await?.is_some();
+        let exists = fs.get_access_key(ak).await?.is_some();
         if exists && secret_intact {
             return Ok(KeyOutcome::Kept {
                 access_key: ak.to_string(),
@@ -99,18 +109,11 @@ pub async fn ensure_access_key(
         }
         if exists {
             // Secret lost; the SK is unrecoverable — revoke and reissue.
-            fs.delete_access_key(username, password, ak).await?;
+            fs.delete_access_key(ak).await?;
         }
         let secret_key = generate_secret_key();
-        fs.create_access_key(
-            username,
-            password,
-            ak,
-            &secret_key,
-            spec.description.clone(),
-            policy,
-        )
-        .await?;
+        fs.create_access_key(username, ak, &secret_key, spec.description.clone(), policy)
+            .await?;
         return Ok(KeyOutcome::Issued {
             access_key: ak.to_string(),
             secret_key,
@@ -121,7 +124,6 @@ pub async fn ensure_access_key(
     let secret_key = generate_secret_key();
     fs.create_access_key(
         username,
-        password,
         &access_key,
         &secret_key,
         spec.description.clone(),
@@ -137,7 +139,6 @@ pub async fn ensure_access_key(
 pub async fn cleanup_access_key(
     fs: &dyn RustFs,
     username: &str,
-    password: &str,
     access_key: Option<&str>,
     spec: &AccessKeySpec,
 ) -> Result<()> {
@@ -145,7 +146,7 @@ pub async fn cleanup_access_key(
         // A colliding key was never created, and asking the server to revoke
         // an id that resolves to the user itself is not worth the risk.
         (DeletionPolicy::Delete, Some(ak)) if ak == username => Ok(()),
-        (DeletionPolicy::Delete, Some(ak)) => fs.delete_access_key(username, password, ak).await,
+        (DeletionPolicy::Delete, Some(ak)) => fs.delete_access_key(ak).await,
         _ => Ok(()),
     }
 }
@@ -226,8 +227,6 @@ async fn apply(obj: Arc<AccessKey>, ctx: &Context) -> Result<Action> {
     let secret_name = obj.target_secret_name();
 
     let result: Result<String> = async {
-        let password =
-            secret_key_value(&ctx.client, &ns, &obj.spec.password_ref, "password").await?;
         let fs = provider_for(&ctx.client, &ns, &obj.spec.connection).await?;
 
         let known_ak = obj
@@ -240,15 +239,8 @@ async fn apply(obj: Arc<AccessKey>, ctx: &Context) -> Result<Action> {
             None => false,
         };
 
-        let outcome = ensure_access_key(
-            &fs,
-            &obj.spec.user,
-            &password,
-            known_ak.as_deref(),
-            intact,
-            &obj.spec,
-        )
-        .await?;
+        let outcome =
+            ensure_access_key(&fs, &obj.spec.user, known_ak.as_deref(), intact, &obj.spec).await?;
         if let KeyOutcome::Issued {
             access_key,
             secret_key,
@@ -301,22 +293,8 @@ async fn cleanup(obj: Arc<AccessKey>, ctx: &Context) -> Result<Action> {
     if known_ak.is_none() {
         return Ok(Action::await_change());
     }
-    // Best-effort password read: on `helm uninstall` the password Secret and
-    // this CR are often deleted together. Revocation tries the admin
-    // credentials first, so an empty password still succeeds; it is only
-    // needed for the user-scoped fallback.
-    let password = secret_key_value(&ctx.client, &ns, &obj.spec.password_ref, "password")
-        .await
-        .unwrap_or_default();
     let fs = provider_for(&ctx.client, &ns, &obj.spec.connection).await?;
-    cleanup_access_key(
-        &fs,
-        &obj.spec.user,
-        &password,
-        known_ak.as_deref(),
-        &obj.spec,
-    )
-    .await?;
+    cleanup_access_key(&fs, &obj.spec.user, known_ak.as_deref(), &obj.spec).await?;
     Ok(Action::await_change())
 }
 
@@ -331,10 +309,7 @@ mod tests {
         AccessKeySpec {
             connection: ConnectionRef::cluster("prod"),
             user: "spark".into(),
-            password_ref: SecretKeyRef {
-                name: "spark-password".into(),
-                key: None,
-            },
+            password_ref: None,
             access_key: access_key.map(str::to_string),
             description: None,
             policy: None,
@@ -347,12 +322,10 @@ mod tests {
     async fn issues_generated_key_when_none_known() {
         let mut fs = MockRustFs::new();
         fs.expect_create_access_key()
-            .withf(|user, pwd, ak, sk, _, _| {
-                user == "spark" && pwd == "pw" && ak.len() == 20 && sk.len() == 40
-            })
-            .return_once(|_, _, _, _, _, _| Ok(()));
+            .withf(|user, ak, sk, _, _| user == "spark" && ak.len() == 20 && sk.len() == 40)
+            .return_once(|_, _, _, _, _| Ok(()));
 
-        match ensure_access_key(&fs, "spark", "pw", None, false, &spec(None))
+        match ensure_access_key(&fs, "spark", None, false, &spec(None))
             .await
             .unwrap()
         {
@@ -365,10 +338,10 @@ mod tests {
     async fn existing_key_with_intact_secret_is_kept() {
         let mut fs = MockRustFs::new();
         fs.expect_get_access_key()
-            .withf(|_, _, ak| ak == "AK1")
-            .return_once(|_, _, _| Ok(Some(ServiceAccount::new("AK1"))));
+            .withf(|ak| ak == "AK1")
+            .return_once(|_| Ok(Some(ServiceAccount::new("AK1"))));
 
-        let outcome = ensure_access_key(&fs, "spark", "pw", Some("AK1"), true, &spec(Some("AK1")))
+        let outcome = ensure_access_key(&fs, "spark", Some("AK1"), true, &spec(Some("AK1")))
             .await
             .unwrap();
         assert_eq!(
@@ -383,15 +356,15 @@ mod tests {
     async fn lost_secret_revokes_and_reissues() {
         let mut fs = MockRustFs::new();
         fs.expect_get_access_key()
-            .return_once(|_, _, _| Ok(Some(ServiceAccount::new("AK1"))));
+            .return_once(|_| Ok(Some(ServiceAccount::new("AK1"))));
         fs.expect_delete_access_key()
-            .withf(|_, _, ak| ak == "AK1")
-            .return_once(|_, _, _| Ok(()));
+            .withf(|ak| ak == "AK1")
+            .return_once(|_| Ok(()));
         fs.expect_create_access_key()
-            .withf(|_, _, ak, _, _, _| ak == "AK1")
-            .return_once(|_, _, _, _, _, _| Ok(()));
+            .withf(|_, ak, _, _, _| ak == "AK1")
+            .return_once(|_, _, _, _, _| Ok(()));
 
-        match ensure_access_key(&fs, "spark", "pw", Some("AK1"), false, &spec(None))
+        match ensure_access_key(&fs, "spark", Some("AK1"), false, &spec(None))
             .await
             .unwrap()
         {
@@ -403,12 +376,12 @@ mod tests {
     #[tokio::test]
     async fn key_deleted_serverside_is_recreated() {
         let mut fs = MockRustFs::new();
-        fs.expect_get_access_key().return_once(|_, _, _| Ok(None));
+        fs.expect_get_access_key().return_once(|_| Ok(None));
         fs.expect_create_access_key()
-            .withf(|_, _, ak, _, _, _| ak == "AK1")
-            .return_once(|_, _, _, _, _, _| Ok(()));
+            .withf(|_, ak, _, _, _| ak == "AK1")
+            .return_once(|_, _, _, _, _| Ok(()));
 
-        match ensure_access_key(&fs, "spark", "pw", Some("AK1"), true, &spec(Some("AK1")))
+        match ensure_access_key(&fs, "spark", Some("AK1"), true, &spec(Some("AK1")))
             .await
             .unwrap()
         {
@@ -420,16 +393,9 @@ mod tests {
     #[tokio::test]
     async fn access_key_equal_to_username_is_rejected_without_api_calls() {
         let fs = MockRustFs::new(); // any call panics
-        let err = ensure_access_key(
-            &fs,
-            "spark",
-            "pw",
-            Some("spark"),
-            false,
-            &spec(Some("spark")),
-        )
-        .await
-        .expect_err("collision must be rejected");
+        let err = ensure_access_key(&fs, "spark", Some("spark"), false, &spec(Some("spark")))
+            .await
+            .expect_err("collision must be rejected");
         assert!(err.is_config_error(), "should not be retried hot: {err}");
         assert!(
             err.to_string()
@@ -438,9 +404,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn password_ref_is_rejected_as_a_spec_error() {
+        let fs = MockRustFs::new(); // any call panics
+        let mut s = spec(Some("AK1"));
+        s.password_ref = Some(SecretKeyRef {
+            name: "spark-password".into(),
+            key: None,
+        });
+        let err = ensure_access_key(&fs, "spark", Some("AK1"), true, &s)
+            .await
+            .expect_err("a stale passwordRef must be rejected");
+        assert!(err.is_config_error(), "should not be retried hot: {err}");
+        assert!(err.to_string().contains("passwordRef was removed in 0.7.0"));
+    }
+
+    #[tokio::test]
     async fn cleanup_skips_revoking_a_colliding_key() {
         let fs = MockRustFs::new(); // delete_access_key must not be called
-        cleanup_access_key(&fs, "spark", "pw", Some("spark"), &spec(Some("spark")))
+        cleanup_access_key(&fs, "spark", Some("spark"), &spec(Some("spark")))
             .await
             .unwrap();
     }
@@ -450,7 +431,7 @@ mod tests {
         let fs = MockRustFs::new(); // any call panics
         let mut s = spec(Some("AK1"));
         s.deletion_policy = DeletionPolicy::Retain;
-        cleanup_access_key(&fs, "spark", "pw", Some("AK1"), &s)
+        cleanup_access_key(&fs, "spark", Some("AK1"), &s)
             .await
             .unwrap();
     }

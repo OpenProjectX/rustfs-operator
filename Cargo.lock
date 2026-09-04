@@ -3352,9 +3352,9 @@ dependencies = [
 
 [[package]]
 name = "rc-core"
-version = "0.1.31"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24cbba164a412d1fe595b1e5a6a58d02b9f26b47c5c1849f8fd31c468d913825"
+checksum = "2c29f0b14dfa2b1b5df988baefc5717de4a07402a3af5b15540bfd5760291e3a"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3388,9 +3388,9 @@ dependencies = [
 
 [[package]]
 name = "rc-s3"
-version = "0.1.31"
+version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea41c3139e886ed61ed54341d272a141857cb9880108cb51d4fdf5e30b89372a"
+checksum = "e91216df902251c29cd5116339247546cda51741782506ad6e568317842c5308"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3604,7 +3604,7 @@ dependencies = [
 
 [[package]]
 name = "rustfs-operator"
-version = "0.6.4"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",

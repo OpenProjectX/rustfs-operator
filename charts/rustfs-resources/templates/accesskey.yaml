@@ -6,14 +6,8 @@
 {{- if eq $user "" }}
 {{- fail (printf "%s: 'user' (the owning RustFS username) is required" $id) }}
 {{- end }}
-{{- $fromUser := .passwordFromUser | default "" }}
-{{- $ref := .passwordRef | default dict }}
-{{- $refName := $ref.name | default "" }}
-{{- if and (ne $fromUser "") (ne $refName "") }}
-{{- fail (printf "%s: set either passwordRef or passwordFromUser, not both" $id) }}
-{{- end }}
-{{- if and (eq $fromUser "") (eq $refName "") }}
-{{- fail (printf "%s: a password source is required; set passwordRef or passwordFromUser (a users[] entry with inline password)" $id) }}
+{{- if or (hasKey . "passwordFromUser") (hasKey . "passwordRef") }}
+{{- fail (printf "%s: passwordFromUser/passwordRef were removed in chart 0.7.0. The operator now issues keys with its own admin credential using targetUser, so the owning user's password is no longer needed. Drop the field, and drop the admin:CreateServiceAccount / ListServiceAccounts / RemoveServiceAccount grants from that user's policy if nothing else needs them" $id) }}
 {{- end }}
 {{- $ak := .accessKey | default "" }}
 {{- if and (ne $ak "") (eq $ak $user) }}
@@ -29,16 +23,6 @@ metadata:
 spec:
   {{- include "rustfs-resources.connection" (dict "root" $ "entry" . "id" $id) | nindent 2 }}
   user: {{ $user | quote }}
-  passwordRef:
-    {{- if ne $fromUser "" }}
-    # the Secret this chart creates for the referenced users[] entry
-    name: {{ printf "%s-user-%s" $.Release.Name $fromUser }}
-    {{- else }}
-    name: {{ $refName }}
-    {{- with $ref.key }}
-    key: {{ . }}
-    {{- end }}
-    {{- end }}
   {{- with .accessKey }}
   accessKey: {{ . | quote }}
   {{- end }}

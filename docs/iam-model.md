@@ -112,19 +112,38 @@ Rule of thumb: one workload per identity is fine on the user credential;
 several workloads, or anything needing per-consumer revocation or reduced
 scope, wants access keys.
 
-## Why `AccessKey` needs the user's password
+## How `AccessKey` issues keys
 
-The operator authenticates **as the user** to issue that user's keys, which
-is why `AccessKey` requires `passwordRef` (or `passwordFromUser`) and why
-the owning user's policies must allow `admin:CreateServiceAccount`,
-`admin:ListServiceAccounts` and `admin:RemoveServiceAccount` over itself.
+The operator issues keys with its **admin credential**, naming the owner via
+`targetUser`. The `AccessKey` CR therefore needs nothing but the username:
 
-This is a limitation of the client library, not of RustFS. The server
-accepts `targetUser`, so the admin credential alone would be enough — but
-`targetUser` is not exposed by `rc-core`/`rc-s3`, so the operator cannot
-send it. Tracked upstream in
-[rustfs/cli#340](https://github.com/rustfs/cli/issues/340); once it lands,
-the password requirement and the per-user admin actions can both be dropped.
+```yaml
+spec:
+  connection: { clusterRef: default }
+  user: spark          # becomes targetUser
+```
+
+**The connection must hold RustFS root.** The server's guard is
+`owner || target_user == req_user || target_user == req_parent_user`, so only
+an owner credential may parent a key to somebody else; a scoped admin gets
+`service account parent is outside requester scope`. This is deliberate —
+`admin:CreateServiceAccount` controls *whether* a caller can create keys, not
+*for whom*, and without the guard any holder of that action could mint a
+root-parented key and escalate (GHSA-5354).
+
+Before 0.7.0 the operator authenticated *as the owning user*, which meant every
+`AccessKey` carried `passwordRef`/`passwordFromUser` and every owning user
+needed `admin:CreateServiceAccount`, `admin:ListServiceAccounts` and
+`admin:RemoveServiceAccount` over itself. That was a client-library gap
+([rustfs/cli#340](https://github.com/rustfs/cli/issues/340)), not a server one;
+it was fixed by [#352](https://github.com/rustfs/cli/pull/352) and shipped in
+rc-core 0.1.32, which the operator now requires.
+
+Migrating from 0.6.x: delete `passwordRef` / `passwordFromUser` from every
+`AccessKey`, and drop the three `admin:*ServiceAccount` grants from the owning
+user's policy unless something else needs them. A leftover `passwordRef` is
+rejected as a spec error rather than ignored, and the chart fails at render
+time, so a stale manifest cannot silently keep working.
 
 ## Reading the server directly
 
@@ -139,9 +158,13 @@ rc admin service-account list <alias> --user spark   # that user's keys
 rc admin service-account list <alias>                # the alias's OWN keys
 ```
 
-The `parent:` shown in the listing is the owning user. A key created with
-`rc admin service-account create` is always parented to the alias's
-identity, since the CLI cannot send `targetUser` either.
+The `parent:` shown in the listing is the owning user. Since rc 0.1.32,
+`create` also takes `--user` to parent a new key to someone else (owner
+credentials only); without it the key is parented to the alias's own identity:
+
+```sh
+rc admin service-account create <alias> <AK> <SK> --user spark   # rc >= 0.1.32
+```
 
 ## Other server behaviours worth knowing
 

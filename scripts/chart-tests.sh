@@ -46,7 +46,9 @@ grep -q 'clusterRef: "prod"' <<<"$render" || fail "default connection not applie
 grep -q 'name: rel-user-ci-user' <<<"$render" || fail "chart-created user secret not rendered"
 grep -q 'password: "chart-e2e-password-123"' <<<"$render" || fail "user password not in chart secret"
 grep -q 'kind: AccessKey' <<<"$render" || fail "no AccessKey rendered"
-grep -qE 'name: rel-user-ci-user' <<<"$render" || fail "passwordFromUser not resolved"
+# User keeps passwordRef; AccessKey must not. Check only the AccessKey document.
+akdoc=$(awk '/^kind: AccessKey$/{f=1} f{print} f&&/^---$/{exit}' <<<"$render")
+grep -q 'passwordRef' <<<"$akdoc" && fail "AccessKey must no longer carry passwordRef"
 render=$(helm template rel charts/rustfs-resources --set-json 'buckets=[{"name":"b","connection":{"secretRef":"local"}}]')
 grep -q 'secretRef: "local"' <<<"$render" || fail "per-entry connection override not applied"
 grep -q 'versioning' <<<"$render" && fail "omitted versioning must not render"
@@ -73,8 +75,9 @@ expect_fail $R 'buckets=[{"name":"a","connection":{"clusterRef":"p"},"deletionPo
 expect_fail $R 'policies=[{"name":"a","connection":{"clusterRef":"p"}}]' "'document' is required"
 expect_fail $R 'users=[{"name":"a","connection":{"clusterRef":"p"}}]' "password source is required"
 expect_fail $R 'users=[{"name":"a","connection":{"clusterRef":"p"},"password":"x","passwordRef":{"name":"y"}}]' "not both"
-expect_fail $R 'accessKeys=[{"name":"a","connection":{"clusterRef":"p"},"passwordFromUser":"u"}]' "'user' (the owning RustFS username) is required"
-expect_fail $R 'accessKeys=[{"name":"a","user":"u","connection":{"clusterRef":"p"}}]' "password source is required"
-expect_fail $R 'accessKeys=[{"name":"a","user":"spark","accessKey":"spark","connection":{"clusterRef":"p"},"passwordFromUser":"spark"}]' "must differ from the owning username"
+expect_fail $R 'accessKeys=[{"name":"a","connection":{"clusterRef":"p"}}]' "'user' (the owning RustFS username) is required"
+expect_fail $R 'accessKeys=[{"name":"a","user":"u","connection":{"clusterRef":"p"},"passwordFromUser":"u"}]' "were removed in chart 0.7.0"
+expect_fail $R 'accessKeys=[{"name":"a","user":"u","connection":{"clusterRef":"p"},"passwordRef":{"name":"s"}}]' "were removed in chart 0.7.0"
+expect_fail $R 'accessKeys=[{"name":"a","user":"spark","accessKey":"spark","connection":{"clusterRef":"p"}}]' "must differ from the owning username"
 
 echo "chart-tests OK"

@@ -30,14 +30,14 @@ User "spark"  (policies attach here)
 The operator writes each generated `accessKey`/`secretKey`/`endpoint` into a
 Secret in the CR's namespace, owner-referenced so it is garbage-collected
 with the CR; if that Secret is lost the key is revoked and reissued. Keys
-are issued while authenticated *as the owning user*, so an AccessKey needs
-the user's password and the user's policies must allow
-`admin:CreateServiceAccount`, `admin:ListServiceAccounts` and
-`admin:RemoveServiceAccount`.
+are issued by the operator's admin credential, which names the owner with
+`targetUser`; the server accepts that only from an owner credential, so the
+connection must hold RustFS root.
 
 **See [docs/iam-model.md](docs/iam-model.md)** for how parenting works, why
-the password is required (a client-library gap, not a server one), and how
-to inspect identities with `rc`.
+root is required, and how to inspect identities with `rc`. Upgrading from
+0.6.x is a breaking change — `AccessKey.passwordRef` / the chart's
+`passwordFromUser` are gone.
 
 Namespaced resources select a RustFS server via `spec.connection`, in one of
 two mutually exclusive ways:

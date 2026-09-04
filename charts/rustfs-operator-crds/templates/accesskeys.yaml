@@ -86,7 +86,12 @@ spec:
                 nullable: true
                 type: string
               passwordRef:
-                description: Secret holding that user's password (key defaults to `password`).
+                description: |-
+                  REMOVED in 0.7.0 and rejected if set. Keys are now issued by the admin
+                  credential via `targetUser`, so the owning user's password is no longer
+                  needed. Retained in the schema only so a stale manifest fails loudly
+                  instead of being silently pruned; drop the field.
+                nullable: true
                 properties:
                   key:
                     description: Key within the Secret; each consumer documents its default.
@@ -112,11 +117,13 @@ spec:
                 nullable: true
                 type: string
               user:
-                description: Username of the owning RustFS user.
+                description: |-
+                  Username of the owning RustFS user. The key is parented to this user
+                  via `targetUser`, which the server honours only for an owner
+                  credential — the connection must hold RustFS root.
                 type: string
             required:
             - connection
-            - passwordRef
             - user
             type: object
           status:

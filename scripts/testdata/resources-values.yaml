@@ -17,13 +17,6 @@ policies:
         - Effect: Allow
           Action: ["s3:GetObject", "s3:PutObject"]
           Resource: ["arn:aws:s3:::app-data/*"]
-        # required for the user to manage its own access keys
-        - Effect: Allow
-          Action:
-            - admin:CreateServiceAccount
-            - admin:ListServiceAccounts
-            - admin:RemoveServiceAccount
-          Resource: ["arn:aws:s3:::*"]
 
 users:
   - name: ci-user
@@ -33,5 +26,4 @@ users:
 accessKeys:
   - name: ci-key
     user: ci-user
-    passwordFromUser: ci-user
     description: chart e2e key
