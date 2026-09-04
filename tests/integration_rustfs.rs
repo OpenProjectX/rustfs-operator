@@ -67,12 +67,13 @@ async fn provider_manages_buckets_policies_and_users() {
     let user = fs.get_user("it-user").await.unwrap().unwrap();
     assert!(user.policies().contains(&"it-policy".to_string()));
 
-    // --- access keys (service accounts): issued as the user, usable for S3 ---
+    // --- access keys (service accounts): issued by the admin via targetUser ---
+    // No admin:*ServiceAccount grants here on purpose: since 0.7.0 the owning
+    // user needs none of them, so their absence is part of what this asserts.
     let allow_all = json!({
         "Version": "2012-10-17",
         "Statement": [
-            {"Effect": "Allow", "Action": ["s3:*"], "Resource": ["arn:aws:s3:::*"]},
-            {"Effect": "Allow", "Action": ["admin:CreateServiceAccount", "admin:ListServiceAccounts", "admin:RemoveServiceAccount"], "Resource": ["arn:aws:s3:::*"]}
+            {"Effect": "Allow", "Action": ["s3:*"], "Resource": ["arn:aws:s3:::*"]}
         ]
     });
     fs.put_policy("it-allow-all", &allow_all.to_string())
@@ -85,28 +86,14 @@ async fn provider_manages_buckets_policies_and_users() {
         "ITSAKEY1234567890ABC",
         "it-sa-secret-key-12345678901234567890",
     );
-    assert!(
-        fs.get_access_key("it-user", "it-secret-key-123", sa_ak)
-            .await
-            .unwrap()
-            .is_none()
-    );
-    fs.create_access_key(
-        "it-user",
-        "it-secret-key-123",
-        sa_ak,
-        sa_sk,
-        Some("integration".into()),
-        None,
-    )
-    .await
-    .unwrap();
-    assert!(
-        fs.get_access_key("it-user", "it-secret-key-123", sa_ak)
-            .await
-            .unwrap()
-            .is_some()
-    );
+    assert!(fs.get_access_key(sa_ak).await.unwrap().is_none());
+    fs.create_access_key("it-user", sa_ak, sa_sk, Some("integration".into()), None)
+        .await
+        .unwrap();
+    // The key must be parented to it-user, not to the admin that created it —
+    // this is what `targetUser` buys and the reason no password is needed.
+    let sa = fs.get_access_key(sa_ak).await.unwrap().expect("key exists");
+    assert_eq!(sa.parent_user.as_deref(), Some("it-user"));
     // the issued credentials authenticate and authorize real S3 calls
     let sa_provider = rustfs_operator::provider::RustFsProvider::connect(
         rustfs_operator::provider::ConnectionInfo {
@@ -120,15 +107,8 @@ async fn provider_manages_buckets_policies_and_users() {
     .await
     .unwrap();
     assert!(sa_provider.bucket_exists("it-bucket").await.unwrap());
-    fs.delete_access_key("it-user", "it-secret-key-123", sa_ak)
-        .await
-        .unwrap();
-    assert!(
-        fs.get_access_key("it-user", "it-secret-key-123", sa_ak)
-            .await
-            .unwrap()
-            .is_none()
-    );
+    fs.delete_access_key(sa_ak).await.unwrap();
+    assert!(fs.get_access_key(sa_ak).await.unwrap().is_none());
     fs.set_user_status("it-user", false).await.unwrap();
 
     // replace semantics: setting a different set drops the old attachment

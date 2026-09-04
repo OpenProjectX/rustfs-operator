@@ -160,20 +160,13 @@ async fn operator_reconciles_crs_against_rustfs() {
                     document: json!({
                         "Version": "2012-10-17",
                         "Statement": [
+                            // No admin:*ServiceAccount grants: since 0.7.0 the
+                            // operator issues keys with its own admin credential
+                            // via targetUser, so the owning user needs none.
                             {
                                 "Effect": "Allow",
                                 "Action": ["s3:GetObject"],
                                 "Resource": ["arn:aws:s3:::e2e-bucket/*"]
-                            },
-                            // required for the user to manage its own access keys
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "admin:CreateServiceAccount",
-                                    "admin:ListServiceAccounts",
-                                    "admin:RemoveServiceAccount"
-                                ],
-                                "Resource": ["arn:aws:s3:::*"]
                             }
                         ]
                     }),
@@ -289,10 +282,7 @@ async fn operator_reconciles_crs_against_rustfs() {
                 AccessKeySpec {
                     connection: conn.clone(),
                     user: "e2e-user".into(),
-                    password_ref: SecretKeyRef {
-                        name: "e2e-user-creds".into(),
-                        key: None,
-                    },
+                    password_ref: None,
                     access_key: None,
                     description: Some("e2e".into()),
                     policy: None,
@@ -326,10 +316,7 @@ async fn operator_reconciles_crs_against_rustfs() {
     assert_eq!(get_key("endpoint"), endpoint);
     assert!(!get_key("secretKey").is_empty());
     assert!(
-        fs.get_access_key("e2e-user", "e2e-password-123", &issued_ak)
-            .await
-            .unwrap()
-            .is_some(),
+        fs.get_access_key(&issued_ak).await.unwrap().is_some(),
         "issued key must exist in RustFS"
     );
 
@@ -339,11 +326,7 @@ async fn operator_reconciles_crs_against_rustfs() {
         .await
         .expect("delete AccessKey CR");
     eventually("access key revoked in RustFS", 60, || async {
-        matches!(
-            fs.get_access_key("e2e-user", "e2e-password-123", &issued_ak)
-                .await,
-            Ok(None)
-        )
+        matches!(fs.get_access_key(&issued_ak).await, Ok(None))
     })
     .await;
     eventually("credentials secret garbage-collected", 60, || async {
