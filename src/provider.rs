@@ -72,33 +72,21 @@ pub trait RustFs: Send + Sync {
     async fn put_policy(&self, name: &str, document: &str) -> Result<()>;
     async fn delete_policy(&self, name: &str) -> Result<()>;
 
-    // Access keys (service accounts). RustFS only mints/manages service
-    // accounts for the calling identity, so these authenticate as the
-    // owning user (username + password) rather than as the admin.
+    // Access keys (service accounts). These run as the admin and name the
+    // owning user with `targetUser`, which the server honours only for an
+    // owner credential — see `docs/iam-model.md`.
     /// The S3 endpoint this provider talks to (stored in credential Secrets).
     fn endpoint(&self) -> String;
-    async fn get_access_key(
-        &self,
-        username: &str,
-        password: &str,
-        access_key: &str,
-    ) -> Result<Option<ServiceAccount>>;
-    #[allow(clippy::too_many_arguments)]
+    async fn get_access_key(&self, access_key: &str) -> Result<Option<ServiceAccount>>;
     async fn create_access_key(
         &self,
         username: &str,
-        password: &str,
         access_key: &str,
         secret_key: &str,
         description: Option<String>,
         policy: Option<String>,
     ) -> Result<()>;
-    async fn delete_access_key(
-        &self,
-        username: &str,
-        password: &str,
-        access_key: &str,
-    ) -> Result<()>;
+    async fn delete_access_key(&self, access_key: &str) -> Result<()>;
 }
 
 /// Real implementation backed by `rc-s3`.
@@ -118,19 +106,9 @@ impl RustFsProvider {
 
     /// Log the equivalent rustfs-cli invocation for an API call.
     /// `$ALIAS` stands for an `rc alias` configured with the admin
-    /// credentials; `$USER_ALIAS` for one configured with the acting
-    /// user's credentials. Filter with RUST_LOG=rc_cli=info.
+    /// credentials. Filter with RUST_LOG=rc_cli=info.
     fn cli(cmd: &str) {
         tracing::info!(target: "rc_cli", "equivalent: rc {cmd}");
-    }
-
-    /// Admin client authenticated as a regular user (for service-account
-    /// operations, which RustFS scopes to the calling identity).
-    fn client_as(&self, username: &str, password: &str) -> Result<AdminClient> {
-        let mut info = self.info.clone();
-        info.access_key = username.to_string();
-        info.secret_key = password.to_string();
-        Ok(AdminClient::new(&info.into_alias())?)
     }
 }
 
@@ -268,38 +246,28 @@ impl RustFs for RustFsProvider {
         self.info.endpoint.clone()
     }
 
-    async fn get_access_key(
-        &self,
-        username: &str,
-        password: &str,
-        access_key: &str,
-    ) -> Result<Option<ServiceAccount>> {
-        Self::cli(&format!(
-            "admin service-account info $USER_ALIAS {access_key}  # $USER_ALIAS uses {username}'s credentials"
-        ));
-        let client = self.client_as(username, password)?;
-        optional(client.get_service_account(access_key).await)
+    async fn get_access_key(&self, access_key: &str) -> Result<Option<ServiceAccount>> {
+        Self::cli(&format!("admin service-account info $ALIAS {access_key}"));
+        optional(self.admin.get_service_account(access_key).await)
     }
 
     async fn create_access_key(
         &self,
         username: &str,
-        password: &str,
         access_key: &str,
         secret_key: &str,
         description: Option<String>,
         policy: Option<String>,
     ) -> Result<()> {
         Self::cli(&format!(
-            "admin service-account create $USER_ALIAS {access_key} ****{}  # $USER_ALIAS uses {username}'s credentials",
+            "admin service-account create $ALIAS {access_key} **** --user {username}{}",
             if policy.is_some() {
                 " --policy policy.json"
             } else {
                 ""
             }
         ));
-        let client = self.client_as(username, password)?;
-        client
+        self.admin
             .create_service_account(CreateServiceAccountRequest {
                 policy,
                 expiry: None,
@@ -307,32 +275,19 @@ impl RustFs for RustFsProvider {
                 description,
                 access_key: access_key.to_string(),
                 secret_key: secret_key.to_string(),
+                // Parents the key to `username` instead of the admin. The
+                // server accepts this only from an owner credential.
+                target_user: Some(username.to_string()),
             })
             .await?;
         Ok(())
     }
 
-    async fn delete_access_key(
-        &self,
-        username: &str,
-        password: &str,
-        access_key: &str,
-    ) -> Result<()> {
+    async fn delete_access_key(&self, access_key: &str) -> Result<()> {
         Self::cli(&format!("admin service-account rm $ALIAS {access_key}"));
-        // Try as admin first (covers keys whose owner was already deleted),
-        // fall back to the owning user.
         match self.admin.delete_service_account(access_key).await {
             Ok(()) => Ok(()),
-            Err(admin_err) => {
-                if absent(admin_err).is_ok() {
-                    return Ok(());
-                }
-                let client = self.client_as(username, password)?;
-                match client.delete_service_account(access_key).await {
-                    Ok(()) => Ok(()),
-                    Err(e) => absent(e),
-                }
-            }
+            Err(e) => absent(e),
         }
     }
 }

@@ -253,10 +253,16 @@ impl User {
 #[serde(rename_all = "camelCase")]
 pub struct AccessKeySpec {
     pub connection: ConnectionRef,
-    /// Username of the owning RustFS user.
+    /// Username of the owning RustFS user. The key is parented to this user
+    /// via `targetUser`, which the server honours only for an owner
+    /// credential — the connection must hold RustFS root.
     pub user: String,
-    /// Secret holding that user's password (key defaults to `password`).
-    pub password_ref: SecretKeyRef,
+    /// REMOVED in 0.7.0 and rejected if set. Keys are now issued by the admin
+    /// credential via `targetUser`, so the owning user's password is no longer
+    /// needed. Retained in the schema only so a stale manifest fails loudly
+    /// instead of being silently pruned; drop the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_ref: Option<SecretKeyRef>,
     /// Explicit access key id; generated when omitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub access_key: Option<String>,

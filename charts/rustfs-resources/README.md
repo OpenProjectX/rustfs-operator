@@ -36,15 +36,13 @@ policies:
 
 users:
   - name: app-user
-    policies: ["app-data-rw"]    # must include admin:*ServiceAccount actions
+    policies: ["app-data-rw"]
     passwordRef:                 # existing Secret with key `password`
       name: app-user-creds
 
 accessKeys:
   - name: app-key                # operator writes AK/SK to Secret
     user: app-user               # "app-key-credentials" in this namespace
-    passwordRef:
-      name: app-user-creds
 ```
 
 ## Values
@@ -55,7 +53,7 @@ accessKeys:
 | `buckets[]` | `name` (required), `bucketName`, `versioning`, `quotaBytes`, `deletionPolicy`, `connection` |
 | `policies[]` | `name` (required), `document` (required), `policyName`, `deletionPolicy`, `connection` |
 | `users[]` | `name` (required), `username`, `passwordRef` **or** inline `password`, `policies`, `enabled`, `deletionPolicy`, `connection` |
-| `accessKeys[]` | `name`, `user` (required), `passwordRef` **or** `passwordFromUser`, `accessKey`, `description`, `policy`, `targetSecretName`, `deletionPolicy`, `connection` |
+| `accessKeys[]` | `name`, `user` (required), `accessKey`, `description`, `policy`, `targetSecretName`, `deletionPolicy`, `connection` |
 
 Fields you omit stay unmanaged (e.g. no `versioning` key means the operator
 never touches versioning). `deletionPolicy` defaults to `Delete` — the
@@ -75,12 +73,13 @@ entry is only needed for per-consumer or reduced-scope credentials
 `<name>-credentials`). The key inherits that user's policies, so grant
 access via `users[].policies` rather than per key.
 
-The password is needed because the operator authenticates as the user to
-issue its keys: set `passwordRef`, or `passwordFromUser: <users[] entry>` to
-reuse the password Secret this chart created for that user. For the same
-reason the user's policies must allow `admin:CreateServiceAccount`,
-`admin:ListServiceAccounts` and `admin:RemoveServiceAccount` over itself.
-See [docs/iam-model.md](../../docs/iam-model.md).
+Only `user` is needed: since chart 0.7.0 the operator issues keys with its own
+admin credential, naming the owner via `targetUser`. `passwordFromUser` and
+`passwordRef` were removed and are rejected at render time, and the owning
+user no longer needs `admin:CreateServiceAccount` /
+`admin:ListServiceAccounts` / `admin:RemoveServiceAccount`. This requires the
+operator's connection to hold RustFS root — see
+[docs/iam-model.md](../../docs/iam-model.md).
 
 ## Prerequisites
 

@@ -39,8 +39,6 @@ users: []
 #     # ... OR let the chart create one (WARNING: the password then lives
 #     # in the Helm release values; prefer passwordRef in production):
 #     password: ""
-#     # to issue access keys for this user, its policies must include the
-#     # admin:CreateServiceAccount / ListServiceAccounts / RemoveServiceAccount actions
 #     policies: ["app-data-rw"]
 #     enabled: true               # optional
 #     deletionPolicy: Delete
@@ -50,10 +48,8 @@ accessKeys: []
 # accessKeys:
 #   - name: app-key               # AK/SK pair for a user; credentials are
 #     user: app-user              # written by the operator to a Secret
-#     # password source for the owning user, EITHER:
-#     passwordFromUser: app-user  # a users[] entry above with inline password
-#     # OR an explicit Secret reference:
-#     # passwordRef: {name: app-user-creds, key: password}
+#     # No password source: the operator issues the key with its own admin
+#     # credential via targetUser, which requires that credential to be root.
 #     accessKey: ""               # optional; generated when empty
 #     description: ""
 #     policy: {}                  # optional inline policy restricting the key
